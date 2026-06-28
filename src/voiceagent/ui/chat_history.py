@@ -1,7 +1,10 @@
-"""チャット履歴。入力欄と同じ横幅の吹き出しを、一定時間でフェード表示する。
+"""チャット履歴。
+
+2 つの表示モード:
+- ライブ（既定）: 吹き出しが一定時間でフェードして消える（キャラがいる雰囲気）。
+- 履歴（「履歴」ボタン ON）: セッションの会話ログをフェードさせずスクロール表示する。
 
 Agent の応答は 1 ターン = 1 吹き出しにまとめ、改行を含む返答もきれいに表示する。
-履歴は「キャラの前面/背面」を切り替えられる（入力欄は常に最前面・別ウィジェット）。
 """
 
 from __future__ import annotations
@@ -15,6 +18,7 @@ from PySide6.QtCore import (
 from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
     QLabel,
+    QScrollArea,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -24,40 +28,45 @@ _VISIBLE_MS = 9000
 _FADE_MS = 1500
 _THINKING_MS = 400
 
-_BUBBLE_QSS = """
-QLabel {
-    background-color: rgba(20, 20, 30, 195);
+_BASE_QSS = """
+QLabel {{
+    background-color: {bg};
     color: #f5f5fa;
     border-radius: 12px;
     padding: 8px 12px;
     font-size: 14px;
-}
+}}
 """
-_USER_QSS = _BUBBLE_QSS.replace("rgba(20, 20, 30, 195)", "rgba(80, 60, 120, 205)")
-_THINKING_QSS = _BUBBLE_QSS.replace("rgba(20, 20, 30, 195)", "rgba(60, 50, 90, 195)")
+_QSS = {
+    "assistant": _BASE_QSS.format(bg="rgba(20, 20, 30, 195)"),
+    "user": _BASE_QSS.format(bg="rgba(80, 60, 120, 205)"),
+    "notice": _BASE_QSS.format(bg="rgba(60, 50, 90, 195)"),
+}
+_SCROLL_QSS = "QScrollArea { background: transparent; border: none; }"
 
 
 class _Bubble(QLabel):
-    """入力欄幅いっぱいの吹き出し。一定時間後にフェードして消える。"""
+    """吹き出し。fade=True のとき一定時間後にフェードして消える。"""
 
-    def __init__(self, text: str, qss: str, parent: QWidget) -> None:
+    def __init__(self, text: str, kind: str, parent: QWidget, *, fade: bool) -> None:
         super().__init__(text, parent)
         self.setWordWrap(True)
         self.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        self.setStyleSheet(qss)
+        self.setStyleSheet(_QSS[kind])
         self._effect = QGraphicsOpacityEffect(self)
         self.setGraphicsEffect(self._effect)
         self._effect.setOpacity(1.0)
+        self._fade = fade
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._fade_out)
         self.touch()
 
     def touch(self) -> None:
-        """表示時間を延長（更新中の吹き出しを消さない）。"""
         self._effect.setOpacity(1.0)
-        self._timer.start(_VISIBLE_MS)
+        if self._fade:
+            self._timer.start(_VISIBLE_MS)
 
     def set_body(self, text: str) -> None:
         self.setText(text)
@@ -74,67 +83,109 @@ class _Bubble(QLabel):
 
 
 class ChatHistory(QWidget):
-    """フェードする吹き出しの履歴。Agent 応答はターン単位で 1 吹き出しに集約。"""
+    """フェード（ライブ）/ 非フェード（履歴）の 2 モードを持つ会話表示。"""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 0)
-        layout.setSpacing(6)
-        layout.addStretch(1)
-        self._layout = layout
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
 
-        self._current_assistant: _Bubble | None = None
-        self._assistant_text = ""
+        self._scroll = QScrollArea(self)
+        self._scroll.setStyleSheet(_SCROLL_QSS)
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._scroll.viewport().setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        outer.addWidget(self._scroll)
 
-        self._thinking = QLabel("考え中", self)
-        self._thinking.setStyleSheet(_THINKING_QSS)
+        self._content = QWidget()
+        self._content.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self._layout = QVBoxLayout(self._content)
+        self._layout.setContentsMargins(8, 8, 8, 0)
+        self._layout.setSpacing(6)
+        self._layout.addStretch(1)
+        self._scroll.setWidget(self._content)
+
+        self._thinking = QLabel("考え中", self._content)
+        self._thinking.setStyleSheet(_QSS["notice"])
         self._thinking.hide()
-        layout.addWidget(self._thinking, 0, Qt.AlignmentFlag.AlignLeft)
+        self._layout.addWidget(self._thinking, 0, Qt.AlignmentFlag.AlignLeft)
         self._dots = 0
         self._thinking_timer = QTimer(self)
         self._thinking_timer.setInterval(_THINKING_MS)
         self._thinking_timer.timeout.connect(self._tick_thinking)
 
+        self._log: list[tuple[str, str]] = []  # (kind, text) セッションの会話ログ
+        self._persistent = False
+        self._current: _Bubble | None = None
+        self._current_text = ""
+
     # --- メッセージ -----------------------------------------------------------
 
     def add_user(self, text: str) -> None:
         self._finalize_assistant()
-        self._add_bubble(text, _USER_QSS)
+        self._log.append(("user", text))
+        self._add_bubble(text, "user")
+        self._scroll_to_bottom()
 
     def append_assistant(self, text: str) -> None:
-        """Agent の文を現在ターンの吹き出しに追記（改行を含めて整形表示）。"""
-        if self._current_assistant is None:
-            self._assistant_text = text
-            self._current_assistant = self._add_bubble(text, _BUBBLE_QSS)
+        if self._current is None:
+            self._current_text = text
+            self._log.append(("assistant", text))
+            self._current = self._add_bubble(text, "assistant")
         else:
-            sep = "" if self._assistant_text.endswith(("\n", "。", "！", "？")) else " "
-            self._assistant_text = f"{self._assistant_text}{sep}{text}".strip()
-            self._current_assistant.set_body(self._assistant_text)
+            sep = "" if self._current_text.endswith(("\n", "。", "！", "？")) else " "
+            self._current_text = f"{self._current_text}{sep}{text}".strip()
+            self._current.set_body(self._current_text)
+            if self._log and self._log[-1][0] == "assistant":
+                self._log[-1] = ("assistant", self._current_text)
+        self._scroll_to_bottom()
 
     def add_notice(self, text: str) -> None:
         self._finalize_assistant()
-        self._add_bubble(text, _THINKING_QSS)
+        self._log.append(("notice", text))
+        self._add_bubble(text, "notice")
+        self._scroll_to_bottom()
 
     def _finalize_assistant(self) -> None:
-        self._current_assistant = None
-        self._assistant_text = ""
+        self._current = None
+        self._current_text = ""
 
-    def _add_bubble(self, text: str, qss: str) -> _Bubble:
-        bubble = _Bubble(text, qss, self)
-        # 「考え中」表示の直前（最後から2番目）に挿入し、入力寄りに新しいものを並べる
+    def _add_bubble(self, text: str, kind: str) -> _Bubble:
+        bubble = _Bubble(text, kind, self._content, fade=not self._persistent)
         self._layout.insertWidget(self._layout.count() - 1, bubble)
         return bubble
 
     def clear(self) -> None:
         self._finalize_assistant()
+        self._log.clear()
+        self._clear_bubbles()
+
+    def _clear_bubbles(self) -> None:
         for i in reversed(range(self._layout.count())):
             w = self._layout.itemAt(i).widget()
             if isinstance(w, _Bubble):
                 self._layout.takeAt(i)
                 w.deleteLater()
+
+    # --- 表示モード -----------------------------------------------------------
+
+    def set_persistent(self, on: bool) -> None:
+        """履歴モードの切替。ON でログ全体を非フェード表示、OFF でライブに戻す。"""
+        self._persistent = on
+        self._finalize_assistant()
+        self._clear_bubbles()
+        if on:
+            for kind, text in self._log:
+                bubble = _Bubble(text, kind, self._content, fade=False)
+                self._layout.insertWidget(self._layout.count() - 1, bubble)
+            self._scroll_to_bottom()
+
+    def _scroll_to_bottom(self) -> None:
+        QTimer.singleShot(0, lambda: self._scroll.verticalScrollBar().setValue(
+            self._scroll.verticalScrollBar().maximum()
+        ))
 
     # --- 考え中インジケータ ---------------------------------------------------
 
