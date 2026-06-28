@@ -18,8 +18,8 @@ _DEFAULT_MODEL = "claude-opus-4-8"
 class WindowState:
     x: int = 100
     y: int = 100
-    width: int = 400
-    height: int = 640
+    width: int = 460
+    height: int = 820
     flipped: bool = False
     character_scale: float = 1.0
     click_through: bool = False

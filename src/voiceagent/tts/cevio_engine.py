@@ -98,7 +98,9 @@ class CevioEngine:
         try:
             pythoncom.CoInitialize()  # 呼び出しスレッドを STA 初期化
             control = win32com.client.Dispatch(_PROGID_CONTROL)
-            result = control.StartHost(False)  # False = GUI を表示せずバックエンド起動
+            # StartHost(noWait=False): 起動完了を待つ。アプリ起動時に EngineManager が
+            # 既に host を起動・最小化済みなら即座に戻る。
+            result = control.StartHost(False)
             if int(result) < 0:
                 raise EngineUnavailableError(f"CeVIO StartHost failed: code={result}")
             talker = win32com.client.Dispatch(_PROGID_TALKER)

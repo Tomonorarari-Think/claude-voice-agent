@@ -18,7 +18,7 @@ import httpx
 from voiceagent.config.characters import CharacterConfig
 from voiceagent.config.paths import EnginePaths
 from voiceagent.domain.character import CharacterId, EngineKind
-from voiceagent.tts.cevio_engine import CevioEngine
+from voiceagent.tts.cevio_engine import _PROGID_CONTROL, CevioEngine
 from voiceagent.tts.engine_base import EngineUnavailableError, VoiceEngine
 from voiceagent.tts.voicevox_engine import VoicevoxEngine
 
@@ -71,6 +71,77 @@ class EngineManager:
                 return
             time.sleep(0.5)
         raise EngineUnavailableError("VOICEVOX エンジンの起動がタイムアウトしました")
+
+    # --- CeVIO バックエンド ---------------------------------------------------
+
+    def start_cevio_host(self) -> bool:
+        """CeVIO AI ホストをバックエンド起動し、ウィンドウを最小化する。
+
+        ここでは host プロセスを起動するだけで、Talker2（COM）は生成しない。
+        実際の合成は各 worker スレッドで遅延生成され、起動済みホストへ接続する。
+        呼び出しスレッドで COM を初期化するため、専用スレッドから呼ぶこと。
+        戻り値は起動に成功したか。
+        """
+        if not any(c.engine == EngineKind.CEVIO for c in self._configs.values()):
+            return False
+        try:
+            import pythoncom  # type: ignore
+            import win32com.client  # type: ignore
+        except ImportError:
+            return False
+        try:
+            pythoncom.CoInitialize()
+            control = win32com.client.Dispatch(_PROGID_CONTROL)
+            control.StartHost(False)
+            self._minimize_cevio_window()
+            return True
+        except Exception:
+            return False
+        finally:
+            try:
+                pythoncom.CoUninitialize()
+            except Exception:
+                pass
+
+    @staticmethod
+    def _minimize_cevio_window(*, timeout: float = 12.0) -> None:
+        """CeVIO AI のメインウィンドウを探して最小化する。"""
+        if sys.platform != "win32":
+            return
+        try:
+            import win32con  # type: ignore
+            import win32gui  # type: ignore
+        except ImportError:
+            return
+
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            found: list[int] = []
+
+            def _cb(hwnd: int, _ctx) -> None:
+                if not win32gui.IsWindowVisible(hwnd):
+                    return
+                title = win32gui.GetWindowText(hwnd)
+                if title and title.startswith("CeVIO AI"):
+                    found.append(hwnd)
+
+            win32gui.EnumWindows(_cb, None)
+            if found:
+                for hwnd in found:
+                    win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+                return
+            time.sleep(0.5)
+
+    def start_backends(self) -> dict[str, bool]:
+        """VOICEVOX と CeVIO のバックエンドを起動する（専用スレッドから呼ぶ）。"""
+        result: dict[str, bool] = {}
+        try:
+            self.ensure_voicevox()
+            result["voicevox"] = True
+        except EngineUnavailableError:
+            result["voicevox"] = False
+        result["cevio"] = self.start_cevio_host()
+        return result
 
     # --- エンジン取得 ---------------------------------------------------------
 
