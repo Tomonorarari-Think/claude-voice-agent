@@ -34,6 +34,8 @@ assets/characters/
 *.psd
 local_settings.toml
 local_settings.json
+# ローカル環境固有のエンジンパス（各自で VoiceAppPath.example.md からコピー）
+VoiceAppPath.md
 
 # --- Runtime / generated ---
 *.wav
