@@ -26,3 +26,11 @@ happy = "smile"
 angry = "angry"
 sad = "sad"
 calm = "calm"
+
+# 立ち絵 PSD の口スロット (!口) のインデックス。
+# つむぎ PSD は口レイヤー名が異なるため、inspect_cli で確認して調整してください。
+[mouth]
+closed_index = 0
+open_index = 1
+
+[expression]

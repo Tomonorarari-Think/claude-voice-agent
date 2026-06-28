@@ -69,3 +69,16 @@ def build_mouth_timeline(
     if frames and frames[-1].shape != MouthShape.CLOSED:
         frames.append(MouthFrame(start=end, shape=MouthShape.CLOSED))
     return tuple(frames)
+
+
+def shape_at(frames: tuple[MouthFrame, ...] | list[MouthFrame], position: float) -> MouthShape:
+    """再生位置（秒）に対応する口形を返す。フレームは start 昇順前提。"""
+    if not frames:
+        return MouthShape.CLOSED
+    current = MouthShape.CLOSED
+    for frame in frames:
+        if frame.start <= position:
+            current = frame.shape
+        else:
+            break
+    return current
