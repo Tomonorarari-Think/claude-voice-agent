@@ -149,10 +149,6 @@ class MainWindow(QWidget):
         view = CharacterView(renderer, self, upper_body_fraction=fraction)
         view.set_flipped(self._flip)
         view.set_upper_body(self._upper)
-        view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        view.customContextMenuRequested.connect(
-            lambda pos, v=view: self._show_menu(v.mapToGlobal(pos))
-        )
         view.show()
         self._character_view = view
         self._relayout()
@@ -217,6 +213,11 @@ class MainWindow(QWidget):
         self._apply_z_order()
 
     # --- 右クリックメニュー ---------------------------------------------------
+
+    def contextMenuEvent(self, event) -> None:  # noqa: N802
+        # ウィンドウのどこを右クリックしてもメニューを出す（履歴等が上に重なっていても）。
+        self._show_menu(event.globalPos())
+        event.accept()
 
     def _show_menu(self, global_pos) -> None:
         menu = QMenu(self)
