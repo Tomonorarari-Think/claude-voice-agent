@@ -11,6 +11,7 @@ COM は Windows 専用かつ CeVIO AI 製品のインストールが前提のた
 from __future__ import annotations
 
 import tempfile
+import threading
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -81,14 +82,17 @@ class CevioEngine:
         self._config = config
         self._character = character
         self._volume = volume
-        self._control: Any | None = None
-        self._talker: Any | None = None
+        # COM オブジェクトは生成したスレッドに束縛されるため、スレッドごとに保持する。
+        # （会話ターンごとに別 worker スレッドで合成されるため、共有すると
+        #  クロススレッド呼び出しで失敗する＝キャラ切替後に読み上げが止まる原因）
+        self._local = threading.local()
 
-    # --- COM ライフサイクル ---------------------------------------------------
+    # --- COM ライフサイクル（スレッドローカル） -------------------------------
 
-    def _ensure_started(self) -> None:
-        if self._talker is not None:
-            return
+    def _talker(self) -> Any:
+        talker = getattr(self._local, "talker", None)
+        if talker is not None:
+            return talker
         try:
             import pythoncom  # type: ignore
             import win32com.client  # type: ignore
@@ -96,11 +100,9 @@ class CevioEngine:
             raise EngineUnavailableError("pywin32 / CeVIO COM が利用できません") from exc
 
         try:
-            pythoncom.CoInitialize()  # 呼び出しスレッドを STA 初期化
+            pythoncom.CoInitialize()  # この worker スレッドを STA 初期化
             control = win32com.client.Dispatch(_PROGID_CONTROL)
-            # StartHost(noWait=False): 起動完了を待つ。アプリ起動時に EngineManager が
-            # 既に host を起動・最小化済みなら即座に戻る。
-            result = control.StartHost(False)
+            result = control.StartHost(False)  # 起動済みなら即時戻る
             if int(result) < 0:
                 raise EngineUnavailableError(f"CeVIO StartHost failed: code={result}")
             talker = win32com.client.Dispatch(_PROGID_TALKER)
@@ -111,25 +113,21 @@ class CevioEngine:
         except Exception as exc:  # pragma: no cover - COM 実機依存
             raise EngineUnavailableError(f"CeVIO 初期化に失敗: {exc}") from exc
 
-        self._control = control
-        self._talker = talker
+        self._local.talker = talker
+        return talker
 
     def is_available(self) -> bool:
         try:
-            self._ensure_started()
-            return self._talker is not None
+            return self._talker() is not None
         except EngineUnavailableError:
             return False
 
     # --- 感情マッピング -------------------------------------------------------
 
-    def _apply_emotion(self, emotion: Emotion) -> None:
-        assert self._talker is not None
-        components = self._talker.Components
+    def _apply_emotion(self, talker: Any, emotion: Emotion) -> None:
         value = self._config.cevio_value_for(emotion)
-        # 対象感情のみ強調し、他を 0 に寄せる（キャストにより日本語名が異なる）
         try:
-            components.ByName(emotion.label_ja).Value = value
+            talker.Components.ByName(emotion.label_ja).Value = value
         except Exception:  # pragma: no cover - キャストに該当感情が無い場合
             pass
 
@@ -138,15 +136,14 @@ class CevioEngine:
     def synthesize(self, text: str, emotion: Emotion = Emotion.NEUTRAL) -> Utterance:
         if not text.strip():
             raise ValueError("text must not be empty")
-        self._ensure_started()
-        assert self._talker is not None
+        talker = self._talker()
 
-        self._apply_emotion(emotion)
+        self._apply_emotion(talker, emotion)
         try:
-            phonemes = to_phonemes(self._talker.GetPhonemes(text))
+            phonemes = to_phonemes(talker.GetPhonemes(text))
             with tempfile.TemporaryDirectory() as tmp:
                 wav_path = Path(tmp) / "out.wav"
-                ok = self._talker.OutputWaveToFile(text, str(wav_path))
+                ok = talker.OutputWaveToFile(text, str(wav_path))
                 if not ok or not wav_path.exists():
                     raise EngineUnavailableError("CeVIO OutputWaveToFile が失敗しました")
                 wav = wav_path.read_bytes()
@@ -165,5 +162,4 @@ class CevioEngine:
 
     def close(self) -> None:
         # StartHost したホストは他プロセスでも使う可能性があるため CloseHost はしない。
-        self._talker = None
-        self._control = None
+        self._local = threading.local()

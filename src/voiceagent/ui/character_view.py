@@ -35,8 +35,11 @@ class CharacterView(QWidget):
         self._drag_offset: QPoint | None = None
         self._upper_body = False  # True で上半身ズーム（YouTube 風）
         # 初期表示は高速プレビュー（既定の口）。重いレイヤー合成はウォームアップ後に
-        # refresh() で差し替える（GUI を固めないため）。
-        self._pixmap = pil_to_qpixmap(self._renderer.preview())
+        # refresh() で差し替える。背景が焼き込まれた PSD は preview() が None を返すため、
+        # その場合はウォームアップ完了まで何も描かない（白背景を出さない）。
+        preview = self._renderer.preview()
+        if preview is not None:
+            self._pixmap = pil_to_qpixmap(preview)
         self._scaled_for = None
 
     def refresh(self) -> None:

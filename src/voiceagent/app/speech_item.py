@@ -19,3 +19,12 @@ class SpeechItem:
     emotion: Emotion
     wav: bytes
     mouth_timeline: tuple[MouthFrame, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SpeakRequest:
+    """合成依頼（テキスト + 感情 + どのキャラのエンジンを使うか）。"""
+
+    text: str
+    emotion: Emotion
+    character: "object"  # CharacterId（循環 import 回避のため緩く保持）
