@@ -33,6 +33,7 @@ Thumbs.db
 assets/characters/
 *.psd
 local_settings.toml
+local_settings.json
 
 # --- Runtime / generated ---
 *.wav
