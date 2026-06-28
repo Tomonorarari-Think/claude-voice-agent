@@ -64,8 +64,8 @@ class InputBar(QWidget):
 
         self.history_btn = QPushButton("履歴", self)
         self.history_btn.setCheckable(True)
-        self.history_btn.setChecked(True)
-        self.history_btn.setToolTip("チャット履歴の表示/非表示")
+        self.history_btn.setChecked(False)
+        self.history_btn.setToolTip("会話ログをスクロール表示（ON）/ フェード表示（OFF）")
         self.history_btn.toggled.connect(self.history_toggled.emit)
         top.addWidget(self.history_btn)
 
