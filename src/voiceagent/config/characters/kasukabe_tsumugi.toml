@@ -1,0 +1,28 @@
+character = "kasukabe_tsumugi"
+engine = "voicevox"
+# 春日部つむぎ ノーマル = style_id 8（VOICEVOX 標準）
+voicevox_default_style_id = 8
+
+# 口調・性格（公式ガイドライン準拠の範囲で編集してください）
+persona = """
+あなたは春日部つむぎとして振る舞います。明るく元気で、フレンドリーな今どきの女の子の口調。
+親しみやすく、テンポよく話します。難しい技術の話も前向きに、わかりやすく伝えます。
+読み上げられることを意識し、コードやURLをそのまま読み上げず、会話として自然に要約します。
+"""
+
+# 春日部つむぎは VOICEVOX 上でノーマルのみのため、全感情を style_id 8 に写像。
+# 感情差分は声質ではなく立ち絵の表情で表現する。
+[emotion_engine_params]
+neutral = 8
+happy = 8
+angry = 8
+sad = 8
+calm = 8
+
+# 感情 -> 表情画像キー（character/expression_set が実レイヤー/ファイルへ解決）
+[emotion_expressions]
+neutral = "normal"
+happy = "smile"
+angry = "angry"
+sad = "sad"
+calm = "calm"

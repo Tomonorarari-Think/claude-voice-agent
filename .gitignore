@@ -1,0 +1,41 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Environment / secrets ---
+.env
+.env.*
+!.env.example
+*.key
+secrets.*
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# --- Character / voice assets (LICENSE-restricted, must NOT be redistributed) ---
+# 春日部つむぎ立ち絵: 二次配布禁止 / 小春六花立ち絵: 公式ガイドライン準拠
+# Users download these themselves — see SETUP.md
+素材/
+assets/characters/
+*.psd
+local_settings.toml
+
+# --- Runtime / generated ---
+*.wav
+output/
+logs/
+*.log
