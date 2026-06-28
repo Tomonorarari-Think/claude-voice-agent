@@ -1,5 +1,8 @@
 # 全テキストを LF 正規化（CRLF 警告を抑制）
 * text=auto eol=lf
+# Windows バッチは CRLF 必須
+*.bat text eol=crlf
+*.cmd text eol=crlf
 *.png binary
 *.psd binary
 *.wav binary
