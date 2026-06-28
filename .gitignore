@@ -20,15 +20,16 @@ htmlcov/
 *.key
 secrets.*
 
-# --- IDE / OS ---
+# --- IDE / OS / tooling ---
 .idea/
 .vscode/
+.claude/
 .DS_Store
 Thumbs.db
 
 # --- Character / voice assets (LICENSE-restricted, must NOT be redistributed) ---
 # 春日部つむぎ立ち絵: 二次配布禁止 / 小春六花立ち絵: 公式ガイドライン準拠
-# Users download these themselves — see SETUP.md
+# Users download these themselves — see docs/setup.md
 素材/
 assets/characters/
 *.psd
