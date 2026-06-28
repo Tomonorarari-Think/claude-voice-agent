@@ -34,6 +34,16 @@ src/voiceagent/
 
 設計の詳細は [docs/](docs/) を参照。
 
+## 起動（バッチファイル）
+
+| ファイル | 用途 |
+|----------|------|
+| `setup.bat` | 初回セットアップ（仮想環境作成 + 依存インストール） |
+| `VoiceAgent.bat` | 通常起動（コンソールなしで GUI 起動） |
+| `VoiceAgent-debug.bat` | ログ確認用（コンソール表示。起動しない時はこちら） |
+
+初回は `setup.bat` → 以降は `VoiceAgent.bat` をダブルクリック。
+
 ## 開発
 
 ```powershell
