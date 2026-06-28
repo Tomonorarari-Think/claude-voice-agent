@@ -3,6 +3,9 @@ engine = "voicevox"
 # 春日部つむぎ ノーマル = style_id 8（VOICEVOX 標準）
 voicevox_default_style_id = 8
 
+# 上半身表示で上から残す割合（0-1）。小さいほど狭い（スカートが映らない程度に調整）。
+upper_body_fraction = 0.47
+
 # 口調・性格（公式ガイドライン準拠の範囲で編集してください）
 persona = """
 あなたは春日部つむぎとして振る舞います。明るく元気で、フレンドリーな今どきの女の子の口調。
