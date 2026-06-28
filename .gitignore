@@ -37,6 +37,9 @@ local_settings.json
 # ローカル環境固有のエンジンパス（各自で VoiceAppPath.example.md からコピー）
 VoiceAppPath.md
 
+# CeVIO 公式 SDK サンプル（第三者配布物・各自で入手）
+CevioAI Sample/
+
 # --- Runtime / generated ---
 *.wav
 output/
