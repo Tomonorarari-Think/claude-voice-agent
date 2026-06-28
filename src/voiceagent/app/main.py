@@ -44,11 +44,16 @@ def main() -> int:
     starter.start()
 
     try:
-        return app.exec()
+        code = app.exec()
     finally:
         starter.wait(2000)
         engines.shutdown()
+    # 実行中の QThread / 子プロセスが残ってプロセスが生き続けるのを防ぐため、
+    # 後始末後に確実に終了する。
+    import os
+
+    os._exit(code)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

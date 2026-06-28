@@ -1,4 +1,9 @@
-"""メインウィンドウ。透過・フレームレス・常時最前面のデスクトップウィジェット。"""
+"""メインウィンドウ。透過・フレームレス・常時最前面のデスクトップウィジェット。
+
+立ち絵はウィンドウ全体に表示し、チャットは下部に**重ねて**フロート表示する
+（チャットで立ち絵が押し上げ・拡縮されないように）。前面トグルで
+「立ち絵を前面 / チャットを前面」を切り替えられる。
+"""
 
 from __future__ import annotations
 
@@ -12,7 +17,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizeGrip,
     QSystemTrayIcon,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -28,14 +32,16 @@ from voiceagent.domain.emotion import Emotion
 from voiceagent.ui.character_view import CharacterView
 from voiceagent.ui.chat_overlay import ChatOverlay
 
+_CONTROL_H = 40
+
 _CONTROL_QSS = """
-QWidget#controlBar { background-color: rgba(20,20,30,140); border-radius: 10px; }
+QWidget#controlBar { background-color: rgba(20,20,30,150); border-radius: 10px; }
 QPushButton, QComboBox {
-    background-color: rgba(50,50,70,200); color: #eaeaf2;
-    border: none; border-radius: 8px; padding: 4px 10px; font-size: 12px;
+    background-color: rgba(50,50,70,205); color: #eaeaf2;
+    border: none; border-radius: 8px; padding: 4px 8px; font-size: 12px;
 }
-QPushButton:hover, QComboBox:hover { background-color: rgba(80,80,120,220); }
-QPushButton#flip:checked { background-color: rgba(120,90,160,230); }
+QPushButton:hover, QComboBox:hover { background-color: rgba(80,80,120,225); }
+QPushButton:checked { background-color: rgba(120,90,160,235); }
 """
 
 
@@ -50,7 +56,7 @@ class _ControlBar(QWidget):
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 4, 8, 4)
-        layout.setSpacing(6)
+        layout.setSpacing(5)
 
         self.character_box = QComboBox(self)
         for cid in CharacterId:
@@ -62,21 +68,35 @@ class _ControlBar(QWidget):
             self.model_box.addItem(m.label, m.id)
         layout.addWidget(self.model_box)
 
+        self.front_btn = QPushButton("前面:チャット", self)
+        self.front_btn.setCheckable(True)
+        self.front_btn.setToolTip("立ち絵とチャットの前面を切り替え")
+        layout.addWidget(self.front_btn)
+
+        self.crop_btn = QPushButton("上半身", self)
+        self.crop_btn.setCheckable(True)
+        layout.addWidget(self.crop_btn)
+
         self.flip_btn = QPushButton("反転", self)
-        self.flip_btn.setObjectName("flip")
         self.flip_btn.setCheckable(True)
         layout.addWidget(self.flip_btn)
 
-        self.new_topic_btn = QPushButton("新しい話題", self)
+        self.new_topic_btn = QPushButton("新", self)
+        self.new_topic_btn.setToolTip("新しい話題")
         layout.addWidget(self.new_topic_btn)
 
         layout.addStretch(1)
 
-        self.hide_btn = QPushButton("×", self)
-        self.hide_btn.setFixedWidth(28)
-        layout.addWidget(self.hide_btn)
+        self.tray_btn = QPushButton("－", self)
+        self.tray_btn.setFixedWidth(26)
+        self.tray_btn.setToolTip("トレイに格納")
+        layout.addWidget(self.tray_btn)
 
-    # ウィンドウ移動
+        self.close_btn = QPushButton("×", self)
+        self.close_btn.setFixedWidth(26)
+        self.close_btn.setToolTip("終了")
+        layout.addWidget(self.close_btn)
+
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton:
             self._drag_offset = (
@@ -94,58 +114,44 @@ class _ControlBar(QWidget):
 class MainWindow(QWidget):
     """立ち絵 + チャット + 操作をまとめたデスクトップ常駐ウィンドウ。"""
 
-    def __init__(
-        self,
-        controller: AppController,
-        settings: Settings,
-    ) -> None:
+    def __init__(self, controller: AppController, settings: Settings) -> None:
         super().__init__()
         self._controller = controller
         self._settings = settings
         self._renderers: dict[CharacterId, CharacterRenderer] = {}
+        self._character_view: CharacterView | None = None
+        self._warmer: RendererWarmer | None = None
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.Tool  # タスクバーに出さない
+            | Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setStyleSheet(_CONTROL_QSS)
 
         ws = settings.window
         self.setGeometry(ws.x, ws.y, ws.width, ws.height)
+        self.setMinimumSize(280, 360)
 
         self._player = SpeechPlayer(self)
         self._build_ui()
         self._wire()
         self._load_character(settings.active_character)
         self._setup_tray()
+        self._relayout()
 
     # --- UI 構築 --------------------------------------------------------------
 
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(4)
-
-        self.control_bar = _ControlBar(self)
-        root.addWidget(self.control_bar)
-
-        self._char_container = QVBoxLayout()
-        root.addLayout(self._char_container, 3)  # 立ち絵を主役に
-        self._char_placeholder = QLabel("立ち絵を読み込めません。SETUP.md を参照してください。", self)
-        self._char_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._char_placeholder.setStyleSheet("color:#ffffff; background:transparent;")
-        self._char_container.addWidget(self._char_placeholder)
-        self._character_view: CharacterView | None = None
+        self._placeholder = QLabel("立ち絵を読み込めません。SETUP.md を参照してください。", self)
+        self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._placeholder.setStyleSheet("color:#fff; background:transparent;")
+        self._placeholder.hide()
 
         self.chat = ChatOverlay(self)
-        root.addWidget(self.chat)
-
-        grip_row = QHBoxLayout()
-        grip_row.addStretch(1)
-        grip_row.addWidget(QSizeGrip(self), 0, Qt.AlignmentFlag.AlignRight)
-        root.addLayout(grip_row)
+        self.control_bar = _ControlBar(self)
+        self._grip = QSizeGrip(self)
 
         # 初期 UI 状態
         self.control_bar.character_box.setCurrentIndex(
@@ -155,6 +161,7 @@ class MainWindow(QWidget):
         if idx >= 0:
             self.control_bar.model_box.setCurrentIndex(idx)
         self.control_bar.flip_btn.setChecked(self._settings.window.flipped)
+        self.control_bar.front_btn.setChecked(True)  # 既定はチャット前面
 
     def _wire(self) -> None:
         self.chat.submitted.connect(self._controller.send)
@@ -166,9 +173,47 @@ class MainWindow(QWidget):
 
         self.control_bar.new_topic_btn.clicked.connect(self._on_new_topic)
         self.control_bar.flip_btn.toggled.connect(self._on_flip)
+        self.control_bar.crop_btn.toggled.connect(self._on_crop)
+        self.control_bar.front_btn.toggled.connect(self._on_front_toggle)
         self.control_bar.model_box.currentIndexChanged.connect(self._on_model_changed)
         self.control_bar.character_box.currentIndexChanged.connect(self._on_character_changed)
-        self.control_bar.hide_btn.clicked.connect(self.hide)
+        self.control_bar.tray_btn.clicked.connect(self.hide)
+        self.control_bar.close_btn.clicked.connect(self._quit)
+
+    # --- レイアウト（手動配置・重ね表示） -------------------------------------
+
+    def _relayout(self) -> None:
+        w, h = self.width(), self.height()
+        self.control_bar.setGeometry(0, 0, w, _CONTROL_H)
+        body_top = _CONTROL_H
+        if self._character_view is not None:
+            self._character_view.setGeometry(0, body_top, w, h - body_top)
+        self._placeholder.setGeometry(0, body_top, w, h - body_top)
+        chat_h = max(220, int(h * 0.42))
+        self.chat.setGeometry(0, h - chat_h, w, chat_h)
+        self._grip.setGeometry(w - 18, h - 18, 18, 18)
+        self._apply_z_order()
+
+    def _apply_z_order(self) -> None:
+        chat_front = self.control_bar.front_btn.isChecked()
+        if chat_front:
+            # チャット前面: 立ち絵の上に重ねて表示
+            if self._character_view is not None:
+                self._character_view.lower()
+            self.chat.show()
+            self.chat.raise_()
+            self.chat.set_enabled_input(not self._controller.is_busy)
+        else:
+            # 立ち絵前面: チャットは隠す（透過部分から透けないように）
+            self.chat.hide()
+            if self._character_view is not None:
+                self._character_view.raise_()
+        self._grip.raise_()
+        self.control_bar.raise_()  # 操作バーは常に最前面
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._relayout()
 
     # --- キャラ切替・描画 -----------------------------------------------------
 
@@ -178,8 +223,7 @@ class MainWindow(QWidget):
         psd = resolve_psd_path(self._settings, character)
         if psd is None:
             return None
-        config = self._controller.configs[character]
-        renderer = CharacterRenderer(psd, config)
+        renderer = CharacterRenderer(psd, self._controller.configs[character])
         self._renderers[character] = renderer
         return renderer
 
@@ -189,33 +233,34 @@ class MainWindow(QWidget):
             self._character_view = None
         renderer = self._get_renderer(character)
         if renderer is None:
-            self._char_placeholder.show()
+            self._placeholder.show()
             return
-        self._char_placeholder.hide()
+        self._placeholder.hide()
         view = CharacterView(renderer, self)
         view.set_flipped(self.control_bar.flip_btn.isChecked())
-        self._char_container.addWidget(view)
+        view.set_upper_body(self.control_bar.crop_btn.isChecked())
+        view.show()
         self._character_view = view
+        self._relayout()
         self._warm_renderer(renderer, view)
+
+    def _warm_renderer(self, renderer, view: CharacterView) -> None:
+        warmer = RendererWarmer(renderer, Emotion.NEUTRAL, self)
+        warmer.warmed.connect(view.refresh)
+        warmer.finished.connect(warmer.deleteLater)
+        self._warmer = warmer
+        warmer.start()
 
     def _on_frame(self, emotion, shape) -> None:
         if self._character_view is not None:
             self._character_view.set_frame(emotion, shape)
 
     def _on_busy_changed(self, busy: bool) -> None:
-        self.chat.set_enabled_input(not busy)
+        self.chat.set_enabled_input(not busy and self.control_bar.front_btn.isChecked())
         if busy:
             self.chat.start_thinking()
         else:
             self.chat.stop_thinking()
-
-    def _warm_renderer(self, renderer, view: CharacterView) -> None:
-        """口開閉フレームを別スレッドで合成し、完了後に立ち絵を表示する（初回ラグ回避）。"""
-        warmer = RendererWarmer(renderer, Emotion.NEUTRAL, self)
-        warmer.warmed.connect(view.refresh)
-        warmer.finished.connect(warmer.deleteLater)
-        self._warmer = warmer  # GC 防止
-        warmer.start()
 
     # --- コントロール ---------------------------------------------------------
 
@@ -227,6 +272,15 @@ class MainWindow(QWidget):
     def _on_flip(self, checked: bool) -> None:
         if self._character_view is not None:
             self._character_view.set_flipped(checked)
+
+    def _on_crop(self, checked: bool) -> None:
+        self.control_bar.crop_btn.setText("全身" if checked else "上半身")
+        if self._character_view is not None:
+            self._character_view.set_upper_body(checked)
+
+    def _on_front_toggle(self, chat_front: bool) -> None:
+        self.control_bar.front_btn.setText("前面:チャット" if chat_front else "前面:キャラ")
+        self._apply_z_order()
 
     def _on_model_changed(self, _index: int) -> None:
         self._controller.set_model(self.control_bar.model_box.currentData())
@@ -275,12 +329,10 @@ class MainWindow(QWidget):
         save_settings(self._settings)
 
     def _quit(self) -> None:
-        self._persist()
-        self._tray.hide()
+        """アプリを完全終了する（プロセスを残さない）。"""
         from PySide6.QtWidgets import QApplication
 
-        QApplication.quit()
-
-    def closeEvent(self, event) -> None:  # noqa: N802
         self._persist()
-        super().closeEvent(event)
+        self._player.clear()
+        self._tray.hide()
+        QApplication.quit()  # main 側で engines.shutdown -> os._exit する
