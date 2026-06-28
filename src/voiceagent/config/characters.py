@@ -33,6 +33,8 @@ class CharacterConfig:
     # 立ち絵レイヤー設定（PSD レンダリング用、任意）
     mouth_config: dict = field(default_factory=dict)
     expression_config: dict[str, dict] = field(default_factory=dict)
+    # 上半身表示で上から残す割合（0-1）。小さいほど狭く（スカートが映らない程度）。
+    upper_body_fraction: float = 0.5
 
     def style_id_for(self, emotion: Emotion) -> int | None:
         """VOICEVOX 用。感情に対応する style_id（無ければデフォルト）。"""
@@ -67,5 +69,6 @@ def load_character_configs(data_dir: Path = _DATA_DIR) -> dict[CharacterId, Char
             voicevox_default_style_id=raw.get("voicevox_default_style_id"),
             mouth_config=raw.get("mouth", {}),
             expression_config=raw.get("expression", {}),
+            upper_body_fraction=float(raw.get("upper_body_fraction", 0.47)),
         )
     return configs

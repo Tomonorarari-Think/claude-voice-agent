@@ -46,6 +46,7 @@ class MainWindow(QWidget):
         self._flip = settings.window.flipped
         self._upper = False
         self._history_front = True
+        self._history_visible = True
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -81,6 +82,7 @@ class MainWindow(QWidget):
         self.input_bar.submitted.connect(self._on_submit)
         self.input_bar.model_changed.connect(self._controller.set_model)
         self.input_bar.new_topic.connect(self._on_new_topic)
+        self.input_bar.history_toggled.connect(self._on_history_toggled)
 
         self._controller.assistant_text.connect(self.history.append_assistant)
         self._controller.speech_ready.connect(self._player.enqueue)
@@ -104,13 +106,20 @@ class MainWindow(QWidget):
         self._apply_z_order()
 
     def _apply_z_order(self) -> None:
-        if self._character_view is not None:
-            self._character_view.lower()
-        if self._history_front:
+        if not self._history_visible:
+            self.history.hide()
+        elif self._history_front:
+            # 履歴をキャラの前面に
+            if self._character_view is not None:
+                self._character_view.lower()
             self.history.show()
             self.history.raise_()
         else:
-            self.history.hide()
+            # 履歴をキャラの背面に（透過部分から覗く）
+            self.history.show()
+            self.history.lower()
+            if self._character_view is not None:
+                self._character_view.raise_()
         self.input_bar.raise_()  # 入力バーは常に最前面
         self._grip.raise_()
 
@@ -139,7 +148,8 @@ class MainWindow(QWidget):
             self._placeholder.show()
             return
         self._placeholder.hide()
-        view = CharacterView(renderer, self)
+        fraction = self._controller.configs[character].upper_body_fraction
+        view = CharacterView(renderer, self, upper_body_fraction=fraction)
         view.set_flipped(self._flip)
         view.set_upper_body(self._upper)
         view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -202,6 +212,10 @@ class MainWindow(QWidget):
 
     def _toggle_history_front(self) -> None:
         self._history_front = not self._history_front
+        self._apply_z_order()
+
+    def _on_history_toggled(self, visible: bool) -> None:
+        self._history_visible = visible
         self._apply_z_order()
 
     # --- 右クリックメニュー ---------------------------------------------------

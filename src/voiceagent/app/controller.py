@@ -37,6 +37,7 @@ class AppController(QObject):
         self._sessions = sessions
         self._agent = AgentClient(sessions, cwd=settings.project_path)
         self._worker: AgentTurnWorker | None = None
+        self._busy = False
 
         # 合成は常駐スレッドで直列処理（COM をスレッドに固定するため）。
         self._synth = SynthService(engines, self)
@@ -74,12 +75,14 @@ class AppController(QObject):
 
     @property
     def is_busy(self) -> bool:
-        return self._worker is not None and self._worker.isRunning()
+        # QThread は finished 後に deleteLater されるため参照すると例外になる。
+        # 真偽フラグで状態管理する。
+        return self._busy
 
     # --- 送信 -----------------------------------------------------------------
 
     def send(self, text: str) -> None:
-        if self.is_busy or not text.strip():
+        if self._busy or not text.strip():
             return
         character = self._settings.active_character
         worker = AgentTurnWorker(
@@ -93,14 +96,24 @@ class AppController(QObject):
         worker.speak_request.connect(self._synth.submit)
         worker.failed.connect(self._on_failed)
         worker.turn_done.connect(self._on_done)
-        worker.finished.connect(worker.deleteLater)
+        worker.finished.connect(self._on_worker_finished)
         self._worker = worker
+        self._busy = True
         self.busy_changed.emit(True)
         worker.start()
 
+    def _on_worker_finished(self) -> None:
+        worker = self.sender()
+        if worker is self._worker:
+            self._worker = None
+        if worker is not None:
+            worker.deleteLater()
+
     def _on_failed(self, message: str) -> None:
+        self._busy = False
         self.error.emit(message)
         self.busy_changed.emit(False)
 
     def _on_done(self, _session_id: str) -> None:
+        self._busy = False
         self.busy_changed.emit(False)
