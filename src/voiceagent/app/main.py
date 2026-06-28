@@ -37,8 +37,7 @@ def main() -> int:
     starter = BackendStarter(engines)
     starter.ready.connect(
         lambda r: window.history.add_notice(
-            f"準備完了（VOICEVOX: {'OK' if r.get('voicevox') else '未接続'} / "
-            f"CeVIO: {'OK' if r.get('cevio') else '未接続'}）"
+            f"VOICEVOX: {r.get('voicevox', '未確認')}\nCeVIO: {r.get('cevio', '未確認')}"
         )
     )
     starter.start()

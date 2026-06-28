@@ -47,20 +47,25 @@ class EngineManager:
         except (httpx.HTTPError, OSError):
             return False
 
-    def ensure_voicevox(self, *, startup_timeout: float = 30.0) -> None:
+    def ensure_voicevox(self, *, startup_timeout: float = 45.0) -> None:
         """VOICEVOX エンジンが起動していなければ run.exe をウィンドウなしで起動する。"""
         if self._voicevox_alive():
             return
         exe = self._paths.voicevox_run_exe
-        if not exe or not exe.exists():
+        if not exe:
             raise EngineUnavailableError(
-                f"VOICEVOX エンジンが起動しておらず、run.exe も見つかりません: {exe}"
+                "VOICEVOX の run.exe パスが未設定です（VoiceAppPath.md を作成してください）"
+            )
+        if not exe.exists():
+            raise EngineUnavailableError(
+                f"VOICEVOX の run.exe が見つかりません（VoiceAppPath.md を確認）: {exe}"
             )
         creationflags = 0
         if sys.platform == "win32":
             creationflags = subprocess.CREATE_NO_WINDOW  # コンソール窓を出さない
         self._voicevox_proc = subprocess.Popen(
             [str(exe), "--host", self._paths.voicevox_host, "--port", str(self._paths.voicevox_port)],
+            cwd=str(exe.parent),  # エンジン同梱リソースを確実に解決させる
             creationflags=creationflags,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -132,15 +137,22 @@ class EngineManager:
                 return
             time.sleep(0.5)
 
-    def start_backends(self) -> dict[str, bool]:
-        """VOICEVOX と CeVIO のバックエンドを起動する（専用スレッドから呼ぶ）。"""
-        result: dict[str, bool] = {}
+    def start_backends(self) -> dict[str, str]:
+        """VOICEVOX と CeVIO のバックエンドを起動する（専用スレッドから呼ぶ）。
+
+        戻り値は各エンジンの状態（"OK" または失敗理由）。未接続時に原因が分かるようにする。
+        """
+        result: dict[str, str] = {}
         try:
             self.ensure_voicevox()
-            result["voicevox"] = True
-        except EngineUnavailableError:
-            result["voicevox"] = False
-        result["cevio"] = self.start_cevio_host()
+            result["voicevox"] = "OK"
+        except EngineUnavailableError as exc:
+            result["voicevox"] = str(exc)
+        has_cevio = any(c.engine == EngineKind.CEVIO for c in self._configs.values())
+        if not has_cevio:
+            result["cevio"] = "未使用"
+        else:
+            result["cevio"] = "OK" if self.start_cevio_host() else "未検出/未起動（CeVIO AI を確認）"
         return result
 
     # --- エンジン取得 ---------------------------------------------------------
