@@ -36,7 +36,7 @@ def main() -> int:
     # バックエンド（VOICEVOX / CeVIO）をアプリ起動と同時に裏で起動しておく。
     starter = BackendStarter(engines)
     starter.ready.connect(
-        lambda r: window.chat.add_message(
+        lambda r: window.history.add_notice(
             f"準備完了（VOICEVOX: {'OK' if r.get('voicevox') else '未接続'} / "
             f"CeVIO: {'OK' if r.get('cevio') else '未接続'}）"
         )

@@ -59,6 +59,7 @@ class CharacterRenderer:
         self._overlay_cache: dict[int, "Image.Image"] = {}  # 口index -> オーバーレイ
         self._frame_cache: dict[tuple[Emotion, MouthShape, bool], "Image.Image"] = {}
         self._preview: "Image.Image | None" = None
+        self._preview_done = False
 
     # --- 縮小 -----------------------------------------------------------------
 
@@ -73,16 +74,22 @@ class CharacterRenderer:
 
     # --- 初期プレビュー（高速・既定の口） -------------------------------------
 
-    def preview(self) -> "Image.Image":
+    def preview(self) -> "Image.Image | None":
         """PSD 保存済みの合成（高速）を縮小して返す。初期表示用。
 
-        可視性を変更する前に呼ぶこと（変更後は実合成になり遅くなる）。一度だけ計算。
+        背景が焼き込まれている（全面不透明な）PSD（例: 春日部つむぎ）では透過が
+        効かないため None を返し、ウォームアップ後の実合成フレームを待つ。
+        可視性変更前に一度だけ計算する。
         """
-        if self._preview is None:
-            with self._lock:
-                if self._preview is None:
-                    image = self._psd.composite()
-                    self._preview = self._downscale(image.convert("RGBA"))
+        if self._preview_done:
+            return self._preview
+        with self._lock:
+            if not self._preview_done:
+                image = self._psd.composite().convert("RGBA")
+                alpha_min, _ = image.getchannel("A").getextrema()
+                # 全面不透明 = 背景焼き込み -> プレビューは使わない
+                self._preview = None if alpha_min >= 250 else self._downscale(image)
+                self._preview_done = True
         return self._preview
 
     # --- ベース / オーバーレイ ------------------------------------------------
