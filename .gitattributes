@@ -1,0 +1,5 @@
+# 全テキストを LF 正規化（CRLF 警告を抑制）
+* text=auto eol=lf
+*.png binary
+*.psd binary
+*.wav binary
