@@ -19,10 +19,12 @@ from PySide6.QtWidgets import (
 from voiceagent.app.assets import resolve_psd_path
 from voiceagent.app.controller import AppController
 from voiceagent.app.speech_player import SpeechPlayer
+from voiceagent.app.startup import RendererWarmer
 from voiceagent.character.renderer import CharacterRenderer
 from voiceagent.claude.model_registry import MODELS
 from voiceagent.config.settings import Settings, WindowState, save_settings
 from voiceagent.domain.character import CharacterId
+from voiceagent.domain.emotion import Emotion
 from voiceagent.ui.character_view import CharacterView
 from voiceagent.ui.chat_overlay import ChatOverlay
 
@@ -130,7 +132,7 @@ class MainWindow(QWidget):
         root.addWidget(self.control_bar)
 
         self._char_container = QVBoxLayout()
-        root.addLayout(self._char_container, 1)
+        root.addLayout(self._char_container, 3)  # 立ち絵を主役に
         self._char_placeholder = QLabel("立ち絵を読み込めません。SETUP.md を参照してください。", self)
         self._char_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._char_placeholder.setStyleSheet("color:#ffffff; background:transparent;")
@@ -159,7 +161,7 @@ class MainWindow(QWidget):
         self._controller.assistant_text.connect(lambda t: self.chat.add_message(t))
         self._controller.speech_ready.connect(self._player.enqueue)
         self._controller.error.connect(lambda m: self.chat.add_message(f"⚠ {m}"))
-        self._controller.busy_changed.connect(lambda busy: self.chat.set_enabled_input(not busy))
+        self._controller.busy_changed.connect(self._on_busy_changed)
         self._player.frame.connect(self._on_frame)
 
         self.control_bar.new_topic_btn.clicked.connect(self._on_new_topic)
@@ -194,10 +196,26 @@ class MainWindow(QWidget):
         view.set_flipped(self.control_bar.flip_btn.isChecked())
         self._char_container.addWidget(view)
         self._character_view = view
+        self._warm_renderer(renderer, view)
 
     def _on_frame(self, emotion, shape) -> None:
         if self._character_view is not None:
             self._character_view.set_frame(emotion, shape)
+
+    def _on_busy_changed(self, busy: bool) -> None:
+        self.chat.set_enabled_input(not busy)
+        if busy:
+            self.chat.start_thinking()
+        else:
+            self.chat.stop_thinking()
+
+    def _warm_renderer(self, renderer, view: CharacterView) -> None:
+        """口開閉フレームを別スレッドで合成し、完了後に立ち絵を表示する（初回ラグ回避）。"""
+        warmer = RendererWarmer(renderer, Emotion.NEUTRAL, self)
+        warmer.warmed.connect(view.refresh)
+        warmer.finished.connect(warmer.deleteLater)
+        self._warmer = warmer  # GC 防止
+        warmer.start()
 
     # --- コントロール ---------------------------------------------------------
 

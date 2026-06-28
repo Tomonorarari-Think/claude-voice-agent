@@ -7,6 +7,7 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from voiceagent.app.controller import AppController
+from voiceagent.app.startup import BackendStarter
 from voiceagent.claude.session_manager import SessionManager
 from voiceagent.config.characters import load_character_configs
 from voiceagent.config.paths import resolve_engine_paths
@@ -31,9 +32,21 @@ def main() -> int:
 
     window = MainWindow(controller, settings)
     window.show()
+
+    # バックエンド（VOICEVOX / CeVIO）をアプリ起動と同時に裏で起動しておく。
+    starter = BackendStarter(engines)
+    starter.ready.connect(
+        lambda r: window.chat.add_message(
+            f"準備完了（VOICEVOX: {'OK' if r.get('voicevox') else '未接続'} / "
+            f"CeVIO: {'OK' if r.get('cevio') else '未接続'}）"
+        )
+    )
+    starter.start()
+
     try:
         return app.exec()
     finally:
+        starter.wait(2000)
         engines.shutdown()
 
 
