@@ -27,6 +27,7 @@ QComboBox, QPushButton {
     border: none; border-radius: 8px; padding: 4px 10px; font-size: 12px;
 }
 QComboBox:hover, QPushButton:hover { background-color: rgba(80,80,120,230); }
+QPushButton:checked { background-color: rgba(120,90,160,235); }
 """
 
 
@@ -36,6 +37,7 @@ class InputBar(QWidget):
     submitted = Signal(str)
     model_changed = Signal(str)
     new_topic = Signal()
+    history_toggled = Signal(bool)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -59,6 +61,14 @@ class InputBar(QWidget):
         self.new_btn = QPushButton("新規チャット", self)
         self.new_btn.clicked.connect(self.new_topic.emit)
         top.addWidget(self.new_btn)
+
+        self.history_btn = QPushButton("履歴", self)
+        self.history_btn.setCheckable(True)
+        self.history_btn.setChecked(True)
+        self.history_btn.setToolTip("チャット履歴の表示/非表示")
+        self.history_btn.toggled.connect(self.history_toggled.emit)
+        top.addWidget(self.history_btn)
+
         top.addStretch(1)
         root.addLayout(top)
 

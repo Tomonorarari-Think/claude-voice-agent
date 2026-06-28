@@ -19,11 +19,18 @@ from voiceagent.domain.phoneme import MouthShape
 class CharacterView(QWidget):
     """透過背景に立ち絵を描画し、ドラッグでウィンドウを移動する。"""
 
-    def __init__(self, renderer: CharacterRenderer, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        renderer: CharacterRenderer,
+        parent: QWidget | None = None,
+        *,
+        upper_body_fraction: float = 0.5,
+    ) -> None:
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setCursor(Qt.CursorShape.OpenHandCursor)
         self._renderer = renderer
+        self._upper_fraction = max(0.2, min(upper_body_fraction, 1.0))
         self._flip = False
         self._emotion = Emotion.NEUTRAL
         self._shape = MouthShape.CLOSED
@@ -98,24 +105,22 @@ class CharacterView(QWidget):
             return
         cache_key = (self._key, self.width(), self.height(), self._upper_body)
         if self._scaled_for != cache_key or self._scaled is None:
-            mode = (
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding
-                if self._upper_body  # 幅いっぱいに拡大し、上半身を見せる
-                else Qt.AspectRatioMode.KeepAspectRatio
-            )
-            self._scaled = self._pixmap.scaled(
+            source = self._pixmap
+            if self._upper_body:
+                # 上から一定割合だけを切り出す（スカートが映らない程度の上半身）。
+                crop_h = max(1, int(source.height() * self._upper_fraction))
+                source = source.copy(0, 0, source.width(), crop_h)
+            # 切り出した領域全体が収まるよう内接スケール（上揃えで脚・スカートを画面外へ）
+            self._scaled = source.scaled(
                 self.size(),
-                mode,
+                Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )
             self._scaled_for = cache_key
         scaled = self._scaled
         painter = QPainter(self)
         x = (self.width() - scaled.width()) // 2
-        if self._upper_body:
-            y = 0  # 上揃え（頭から胴体を表示し、脚は画面外）
-        else:
-            y = self.height() - scaled.height()  # 下揃え（全身）
+        y = 0 if self._upper_body else self.height() - scaled.height()
         painter.drawPixmap(x, y, scaled)
 
     # --- ドラッグでウィンドウ移動 ---------------------------------------------
