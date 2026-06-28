@@ -120,7 +120,8 @@ class CharacterView(QWidget):
         scaled = self._scaled
         painter = QPainter(self)
         x = (self.width() - scaled.width()) // 2
-        y = 0 if self._upper_body else self.height() - scaled.height()
+        # 全身・上半身とも下揃え（立ち絵が入力欄の上にぴったり立つ。浮かない）
+        y = self.height() - scaled.height()
         painter.drawPixmap(x, y, scaled)
 
     # --- ドラッグでウィンドウ移動 ---------------------------------------------

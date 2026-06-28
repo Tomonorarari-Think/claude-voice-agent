@@ -46,7 +46,6 @@ class MainWindow(QWidget):
         self._flip = settings.window.flipped
         self._upper = False
         self._history_front = True
-        self._history_visible = True
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -94,29 +93,27 @@ class MainWindow(QWidget):
 
     def _relayout(self) -> None:
         w, h = self.width(), self.height()
-        if self._character_view is not None:
-            self._character_view.setGeometry(0, 0, w, h)
-        self._placeholder.setGeometry(0, 0, w, h)
-
         input_h = self.input_bar.sizeHint().height()
-        self.input_bar.setGeometry(8, h - input_h - 8, w - 16, input_h)
+        input_top = h - input_h - 8
+        # 立ち絵は入力欄の上までを占有（下揃えで描画 → 浮かずに入力欄の上に立つ）
+        if self._character_view is not None:
+            self._character_view.setGeometry(0, 0, w, input_top)
+        self._placeholder.setGeometry(0, 0, w, input_top)
+
+        self.input_bar.setGeometry(8, input_top, w - 16, input_h)
         hist_h = max(160, int(h * 0.5))
-        self.history.setGeometry(0, h - input_h - 16 - hist_h, w, hist_h)
+        self.history.setGeometry(0, max(0, input_top - hist_h), w, hist_h)
         self._grip.setGeometry(w - 16, h - 16, 16, 16)
         self._apply_z_order()
 
     def _apply_z_order(self) -> None:
-        if not self._history_visible:
-            self.history.hide()
-        elif self._history_front:
-            # 履歴をキャラの前面に
+        self.history.show()
+        if self._history_front:
             if self._character_view is not None:
                 self._character_view.lower()
-            self.history.show()
             self.history.raise_()
         else:
             # 履歴をキャラの背面に（透過部分から覗く）
-            self.history.show()
             self.history.lower()
             if self._character_view is not None:
                 self._character_view.raise_()
@@ -214,8 +211,9 @@ class MainWindow(QWidget):
         self._history_front = not self._history_front
         self._apply_z_order()
 
-    def _on_history_toggled(self, visible: bool) -> None:
-        self._history_visible = visible
+    def _on_history_toggled(self, persistent: bool) -> None:
+        # 履歴 ON: セッションのログを非フェードで一覧表示。OFF: ライブ（フェード）表示。
+        self.history.set_persistent(persistent)
         self._apply_z_order()
 
     # --- 右クリックメニュー ---------------------------------------------------
