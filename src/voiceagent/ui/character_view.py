@@ -33,6 +33,7 @@ class CharacterView(QWidget):
         self._scaled: QPixmap | None = None
         self._scaled_for: tuple | None = None
         self._drag_offset: QPoint | None = None
+        self._upper_body = False  # True で上半身ズーム（YouTube 風）
         # 初期表示は高速プレビュー（既定の口）。重いレイヤー合成はウォームアップ後に
         # refresh() で差し替える（GUI を固めないため）。
         self._pixmap = pil_to_qpixmap(self._renderer.preview())
@@ -61,6 +62,18 @@ class CharacterView(QWidget):
     def flipped(self) -> bool:
         return self._flip
 
+    def set_upper_body(self, enabled: bool) -> None:
+        """上半身ズーム表示の切替（幅いっぱい・上揃えで脚を画面外へ）。"""
+        if enabled == self._upper_body:
+            return
+        self._upper_body = enabled
+        self._scaled_for = None
+        self.update()
+
+    @property
+    def upper_body(self) -> bool:
+        return self._upper_body
+
     def _refresh_pixmap(self) -> None:
         key = (self._emotion, self._shape, self._flip)
         if key == self._key:
@@ -80,18 +93,26 @@ class CharacterView(QWidget):
     def paintEvent(self, event) -> None:  # noqa: N802 (Qt API)
         if self._pixmap is None:
             return
-        cache_key = (self._key, self.width(), self.height())
+        cache_key = (self._key, self.width(), self.height(), self._upper_body)
         if self._scaled_for != cache_key or self._scaled is None:
+            mode = (
+                Qt.AspectRatioMode.KeepAspectRatioByExpanding
+                if self._upper_body  # 幅いっぱいに拡大し、上半身を見せる
+                else Qt.AspectRatioMode.KeepAspectRatio
+            )
             self._scaled = self._pixmap.scaled(
                 self.size(),
-                Qt.AspectRatioMode.KeepAspectRatio,
+                mode,
                 Qt.TransformationMode.SmoothTransformation,
             )
             self._scaled_for = cache_key
         scaled = self._scaled
         painter = QPainter(self)
         x = (self.width() - scaled.width()) // 2
-        y = self.height() - scaled.height()  # 下揃え（上半身クロップしやすい）
+        if self._upper_body:
+            y = 0  # 上揃え（頭から胴体を表示し、脚は画面外）
+        else:
+            y = self.height() - scaled.height()  # 下揃え（全身）
         painter.drawPixmap(x, y, scaled)
 
     # --- ドラッグでウィンドウ移動 ---------------------------------------------

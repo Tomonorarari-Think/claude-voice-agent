@@ -34,8 +34,12 @@ class AppController(QObject):
         self._configs = configs
         self._engines = engines
         self._sessions = sessions
-        self._agent = AgentClient(sessions)
+        self._agent = AgentClient(sessions, cwd=settings.project_path)
         self._worker: AgentTurnWorker | None = None
+
+    def shutdown(self) -> None:
+        """エンジン等の後始末（終了時に呼ぶ）。"""
+        self._engines.shutdown()
 
     # --- 設定変更 -------------------------------------------------------------
 
