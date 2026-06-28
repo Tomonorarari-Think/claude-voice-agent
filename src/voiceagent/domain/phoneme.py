@@ -10,10 +10,10 @@ class MouthShape(str, Enum):
     """口形（あいうえお + 閉口）。立ち絵の口レイヤーに対応する。"""
 
     A = "a"
-    I = "i"
+    I = "i"  # noqa: E741 — 母音「い」の口形
     U = "u"
     E = "e"
-    O = "o"
+    O = "o"  # noqa: E741 — 母音「お」の口形
     CLOSED = "closed"
 
 

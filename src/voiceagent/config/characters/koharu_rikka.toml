@@ -24,3 +24,13 @@ happy = "ふふん"
 angry = "ちょっとまてぇ"
 sad = "うぐぐ"
 calm = "それはね"
+
+# 立ち絵 PSD の口スロット (!口) のインデックス（実機 PSD で確認済み: 0=通常, 1=通常開き）
+# python -m voiceagent.character.inspect_cli <psd> で子レイヤー一覧を確認できます。
+[mouth]
+closed_index = 0
+open_index = 1
+
+# 感情 -> 目/眉スロットの子インデックス（任意）。未設定の感情は中立になります。
+# 例: [expression.happy] \n eyes = 1 \n brows = 0
+[expression]

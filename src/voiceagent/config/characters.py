@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from voiceagent.domain.character import CharacterId, EngineKind
@@ -30,6 +30,9 @@ class CharacterConfig:
     emotion_expressions: dict[Emotion, str]
     cevio_cast: str | None = None
     voicevox_default_style_id: int | None = None
+    # 立ち絵レイヤー設定（PSD レンダリング用、任意）
+    mouth_config: dict = field(default_factory=dict)
+    expression_config: dict[str, dict] = field(default_factory=dict)
 
     def style_id_for(self, emotion: Emotion) -> int | None:
         """VOICEVOX 用。感情に対応する style_id（無ければデフォルト）。"""
@@ -62,5 +65,7 @@ def load_character_configs(data_dir: Path = _DATA_DIR) -> dict[CharacterId, Char
             emotion_expressions=_expr_map(raw.get("emotion_expressions", {})),
             cevio_cast=raw.get("cevio_cast"),
             voicevox_default_style_id=raw.get("voicevox_default_style_id"),
+            mouth_config=raw.get("mouth", {}),
+            expression_config=raw.get("expression", {}),
         )
     return configs
