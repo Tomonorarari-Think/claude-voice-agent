@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QObject, Signal
 
+from voiceagent.app.synth_service import SynthService
 from voiceagent.app.turn_worker import AgentTurnWorker
 from voiceagent.claude.agent_client import AgentClient
 from voiceagent.claude.session_manager import SessionManager
@@ -37,8 +38,16 @@ class AppController(QObject):
         self._agent = AgentClient(sessions, cwd=settings.project_path)
         self._worker: AgentTurnWorker | None = None
 
+        # 合成は常駐スレッドで直列処理（COM をスレッドに固定するため）。
+        self._synth = SynthService(engines, self)
+        self._synth.ready.connect(self.speech_ready)
+        self._synth.failed.connect(self.error)
+        self._synth.start()
+
     def shutdown(self) -> None:
         """エンジン等の後始末（終了時に呼ぶ）。"""
+        self._synth.stop()
+        self._synth.wait(1500)
         self._engines.shutdown()
 
     # --- 設定変更 -------------------------------------------------------------
@@ -57,9 +66,11 @@ class AppController(QObject):
     def set_character(self, character: CharacterId) -> None:
         self._settings = self._settings.with_character(character)
         self._sessions.new_topic()  # キャラを変えたら会話も切り替える
+        self._synth.clear()  # 旧キャラ向けの未処理合成を破棄
 
     def new_topic(self) -> None:
         self._sessions.new_topic()
+        self._synth.clear()
 
     @property
     def is_busy(self) -> bool:
@@ -73,14 +84,13 @@ class AppController(QObject):
         character = self._settings.active_character
         worker = AgentTurnWorker(
             self._agent,
-            self._engines,
             character,
             self._configs[character],
             self._settings.model,
             text,
         )
         worker.assistant_text.connect(self.assistant_text)
-        worker.speech_ready.connect(self.speech_ready)
+        worker.speak_request.connect(self._synth.submit)
         worker.failed.connect(self._on_failed)
         worker.turn_done.connect(self._on_done)
         worker.finished.connect(worker.deleteLater)
