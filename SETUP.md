@@ -21,14 +21,15 @@ pip install -e ".[dev]"
 
 ## 3. エンジン/アセットのパス設定
 
-`VoiceAppPath.md` にエンジンのパスを記載するか、`local_settings.json`（自動生成・gitignore対象）で上書きします。
+`VoiceAppPath.example.md` を `VoiceAppPath.md` にコピーして、自分の環境のパスに書き換えます
+（`VoiceAppPath.md` は環境固有のため gitignore 対象）。`local_settings.json`（自動生成・gitignore対象）でも上書きできます。
 
 ```
 ## VOICEVOX
-E:\VOICEVOX\vv-engine\run.exe
+C:\path\to\VOICEVOX\vv-engine\run.exe
 
 ## CeVIO AI
-D:\CeVIO\CeVIO AI
+C:\path\to\CeVIO\CeVIO AI
 ```
 
 ## 4. 立ち絵アセットの配置
