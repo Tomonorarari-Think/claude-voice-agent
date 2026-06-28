@@ -1,9 +1,10 @@
 @echo off
 chcp 65001 >nul
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 rem === 初回セットアップ（仮想環境作成 + 依存インストール） ===
+rem （このスクリプトは scripts\ 配下。リポジトリルートで実行する）
 
 set "PYLAUNCH=py -3"
 where py >nul 2>nul || set "PYLAUNCH=python"
@@ -29,8 +30,8 @@ if errorlevel 1 (
 
 echo.
 echo セットアップが完了しました。
-echo   - 通常起動: VoiceAgent.bat
-echo   - ログ確認: VoiceAgent-debug.bat
-echo ※ 音声/立ち絵アセットの配置は SETUP.md を参照してください。
+echo   - 通常起動: scripts\VoiceAgent.bat
+echo   - ログ確認: scripts\VoiceAgent-debug.bat
+echo ※ 音声/立ち絵アセットの配置は docs\setup.md を参照してください。
 pause
 endlocal

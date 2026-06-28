@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VoiceAgent — Claude 対話読み上げ デスクトップキャラ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+/* ===========================================
+   VIEWPORT FITTING: MANDATORY BASE
+   =========================================== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body { height: 100%; overflow-x: hidden; }
+html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
+
+.slide {
+    width: 100vw; height: 100vh; height: 100dvh;
+    overflow: hidden; scroll-snap-align: start;
+    display: flex; flex-direction: column; position: relative;
+}
+.slide-content {
+    flex: 1; display: flex; flex-direction: column; justify-content: center;
+    max-height: 100%; overflow: hidden; padding: var(--slide-padding);
+    position: relative; z-index: 2;
+}
+
+:root {
+    --title-size: clamp(1.6rem, 5.2vw, 4.2rem);
+    --h2-size: clamp(1.3rem, 3.6vw, 2.6rem);
+    --h3-size: clamp(1rem, 2.4vw, 1.7rem);
+    --body-size: clamp(0.8rem, 1.55vw, 1.15rem);
+    --small-size: clamp(0.65rem, 1.05vw, 0.9rem);
+    --slide-padding: clamp(1.2rem, 5vw, 5rem);
+    --content-gap: clamp(0.6rem, 2vw, 1.8rem);
+    --element-gap: clamp(0.3rem, 1vw, 1rem);
+
+    /* Neon Cyber palette */
+    --bg: #070b16;
+    --bg-2: #0b1226;
+    --ink: #eaf2ff;
+    --muted: #93a4c8;
+    --cyan: #34e3f2;
+    --magenta: #f06bd8;
+    --violet: #8b7bff;
+    --line: rgba(120, 150, 220, 0.18);
+    --card: rgba(20, 30, 58, 0.55);
+}
+
+body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Zen Kaku Gothic New", system-ui, "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Atmospheric background shared across slides */
+.bg-fx { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
+.bg-fx::before {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+        linear-gradient(var(--line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: clamp(40px, 6vw, 90px) clamp(40px, 6vw, 90px);
+    mask-image: radial-gradient(ellipse at 50% 40%, #000 30%, transparent 78%);
+    opacity: 0.5;
+}
+.blob {
+    position: absolute; border-radius: 50%;
+    filter: blur(70px); opacity: 0.5; will-change: transform;
+}
+.blob.a { width: 46vw; height: 46vw; background: radial-gradient(circle, rgba(52,227,242,0.55), transparent 60%); top: -14vw; left: -8vw; }
+.blob.b { width: 42vw; height: 42vw; background: radial-gradient(circle, rgba(240,107,216,0.45), transparent 60%); bottom: -16vw; right: -10vw; }
+.blob.c { width: 30vw; height: 30vw; background: radial-gradient(circle, rgba(139,123,255,0.4), transparent 60%); top: 40%; right: 24%; }
+@media (prefers-reduced-motion: no-preference) {
+    .blob { animation: float 16s ease-in-out infinite alternate; }
+    .blob.b { animation-duration: 20s; }
+    .blob.c { animation-duration: 13s; }
+}
+@keyframes float { to { transform: translate(4vw, 5vh) scale(1.12); } }
+
+/* Typography helpers */
+.eyebrow {
+    font-family: "Space Mono", monospace; font-size: var(--small-size);
+    letter-spacing: 0.28em; text-transform: uppercase; color: var(--cyan);
+    display: flex; align-items: center; gap: 0.7em; margin-bottom: var(--element-gap);
+}
+.eyebrow::before { content: ""; width: clamp(20px, 3vw, 46px); height: 1px; background: var(--cyan); box-shadow: 0 0 12px var(--cyan); }
+
+h1 { font-size: var(--title-size); font-weight: 900; line-height: 1.05; letter-spacing: -0.01em; }
+h2 { font-size: var(--h2-size); font-weight: 800; line-height: 1.12; }
+h3 { font-size: var(--h3-size); font-weight: 700; }
+p { font-size: var(--body-size); line-height: 1.7; color: var(--muted); }
+.lead { color: var(--ink); }
+.glow { color: var(--cyan); text-shadow: 0 0 22px rgba(52,227,242,0.55); }
+.glow-m { color: var(--magenta); text-shadow: 0 0 22px rgba(240,107,216,0.5); }
+
+.kicker-num {
+    font-family: "Space Mono", monospace; color: var(--muted);
+    font-size: var(--small-size); letter-spacing: 0.2em;
+}
+
+/* Cards / grids */
+.grid { display: grid; gap: clamp(0.6rem, 1.4vw, 1.1rem); }
+.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.cols-3 { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 860px) { .cols-3 { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) { .cols-2, .cols-3 { grid-template-columns: 1fr; } }
+
+.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 16px; padding: clamp(0.9rem, 1.8vw, 1.5rem);
+    backdrop-filter: blur(8px); position: relative; overflow: hidden;
+}
+.card h3 { margin-bottom: 0.35em; }
+.card .ic { font-family: "Space Mono", monospace; color: var(--cyan); font-size: var(--small-size); letter-spacing: 0.15em; margin-bottom: 0.5em; display: block; }
+.card p { font-size: var(--small-size); line-height: 1.55; }
+.card.accent { border-color: rgba(52,227,242,0.5); box-shadow: 0 0 40px rgba(52,227,242,0.12) inset; }
+.card.accent-m { border-color: rgba(240,107,216,0.45); box-shadow: 0 0 40px rgba(240,107,216,0.12) inset; }
+
+/* Tag chips */
+.tags { display: flex; flex-wrap: wrap; gap: clamp(0.35rem, 0.8vw, 0.6rem); }
+.tag {
+    font-family: "Space Mono", monospace; font-size: var(--small-size);
+    padding: 0.35em 0.8em; border-radius: 999px; border: 1px solid var(--line);
+    color: var(--ink); background: rgba(120,150,220,0.08); white-space: nowrap;
+}
+.tag.c { border-color: rgba(52,227,242,0.4); color: var(--cyan); }
+.tag.m { border-color: rgba(240,107,216,0.4); color: var(--magenta); }
+
+/* Bullet list */
+ul.bul { list-style: none; display: flex; flex-direction: column; gap: clamp(0.5rem, 1.3vh, 1.1rem); }
+ul.bul li { font-size: var(--body-size); line-height: 1.5; color: var(--ink); padding-left: 1.6em; position: relative; }
+ul.bul li::before { content: "▸"; position: absolute; left: 0; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
+ul.bul li span { color: var(--muted); }
+
+/* Timeline / versions */
+.versions { display: grid; grid-template-columns: 1fr auto 1fr; align-items: stretch; gap: clamp(0.6rem, 2vw, 1.6rem); }
+.arrow { display: flex; align-items: center; justify-content: center; color: var(--cyan); font-size: clamp(1.4rem, 3vw, 2.4rem); text-shadow: 0 0 16px var(--cyan); }
+@media (max-width: 760px) { .versions { grid-template-columns: 1fr; } .arrow { transform: rotate(90deg); } }
+
+/* Comparison table */
+.cmp { width: 100%; border-collapse: collapse; font-size: var(--body-size); }
+.cmp th, .cmp td { padding: clamp(0.5rem, 1.2vh, 0.9rem) clamp(0.6rem, 1.4vw, 1.1rem); text-align: left; border-bottom: 1px solid var(--line); }
+.cmp thead th { font-family: "Space Mono", monospace; font-size: var(--small-size); letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase; }
+.cmp td:first-child { color: var(--muted); font-size: var(--small-size); }
+.cmp .v1 { color: var(--violet); }
+.cmp .v2 { color: var(--cyan); }
+
+/* Code */
+.code {
+    background: rgba(4,8,18,0.85); border: 1px solid var(--line); border-radius: 14px;
+    font-family: "Space Mono", monospace; font-size: clamp(0.72rem, 1.35vw, 1rem);
+    line-height: 1.7; padding: clamp(0.9rem, 2vw, 1.6rem); color: #c9d6f5; overflow: hidden;
+}
+.code .c { color: #5f7196; }
+.code .k { color: var(--magenta); }
+.code .n { color: var(--cyan); }
+
+/* Stat */
+.stat { display: flex; align-items: baseline; gap: 0.3em; }
+.stat b { font-family: "Space Mono", monospace; font-weight: 700; font-size: clamp(2rem, 6vw, 4.4rem); color: var(--cyan); text-shadow: 0 0 26px rgba(52,227,242,0.45); line-height: 1; }
+.stat .u { color: var(--muted); font-size: var(--h3-size); }
+
+.title-tag { display: inline-flex; gap: 0.6em; align-items: center; margin-top: var(--content-gap); }
+.title-tag .dot { width: 0.6em; height: 0.6em; border-radius: 50%; background: var(--magenta); box-shadow: 0 0 12px var(--magenta); }
+
+/* HUD: progress, dots, hint */
+.hud { position: fixed; z-index: 50; font-family: "Space Mono", monospace; }
+.progress { top: 0; left: 0; height: 3px; background: linear-gradient(90deg, var(--cyan), var(--magenta)); width: 0; box-shadow: 0 0 12px var(--cyan); transition: width 0.3s ease; }
+.counter { bottom: clamp(0.8rem, 2vh, 1.5rem); right: clamp(0.9rem, 2vw, 1.8rem); font-size: var(--small-size); color: var(--muted); letter-spacing: 0.15em; }
+.counter b { color: var(--ink); }
+.dots { top: 50%; right: clamp(0.6rem, 1.4vw, 1.2rem); transform: translateY(-50%); display: flex; flex-direction: column; gap: 0.6rem; }
+.dots button { width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--muted); background: transparent; cursor: pointer; padding: 0; transition: all 0.25s; }
+.dots button.active { background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 10px var(--cyan); transform: scale(1.25); }
+.hint { bottom: clamp(0.8rem, 2vh, 1.5rem); left: clamp(0.9rem, 2vw, 1.8rem); font-size: var(--small-size); color: var(--muted); letter-spacing: 0.1em; }
+.hint kbd { border: 1px solid var(--line); border-radius: 5px; padding: 0.1em 0.5em; color: var(--ink); }
+
+@media (max-height: 600px) { .dots, .hint { display: none; } }
+@media (max-width: 600px) { .dots { display: none; } }
+
+/* Reveal animations */
+.reveal > * { opacity: 0; transform: translateY(22px); }
+.slide.in .reveal > * { opacity: 1; transform: none; transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.2,0.7,0.2,1); }
+.slide.in .reveal > *:nth-child(2) { transition-delay: 0.08s; }
+.slide.in .reveal > *:nth-child(3) { transition-delay: 0.16s; }
+.slide.in .reveal > *:nth-child(4) { transition-delay: 0.24s; }
+.slide.in .reveal > *:nth-child(5) { transition-delay: 0.32s; }
+.slide.in .reveal > *:nth-child(6) { transition-delay: 0.40s; }
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.2s !important; }
+    html { scroll-behavior: auto; }
+    .reveal > * { opacity: 1; transform: none; }
+}
+
+/* Short height tightening */
+@media (max-height: 700px) { :root { --slide-padding: clamp(0.9rem, 3.4vw, 2.4rem); --content-gap: clamp(0.45rem, 1.6vw, 1.1rem); --title-size: clamp(1.4rem, 4.6vw, 2.6rem); --h2-size: clamp(1.1rem, 3vw, 1.8rem); } }
+@media (max-height: 560px) { :root { --body-size: clamp(0.7rem, 1.2vw, 0.95rem); --title-size: clamp(1.2rem, 4vw, 2rem); } }
+</style>
+</head>
+<body>
+<div class="hud progress" id="progress"></div>
+<nav class="hud dots" id="dots" aria-label="スライド移動"></nav>
+<div class="hud counter"><b id="cur">01</b> / <span id="total">13</span></div>
+<div class="hud hint"><kbd>→</kbd> / <kbd>Space</kbd> で次へ</div>
+
+<main>
+
+<!-- 1. TITLE -->
+<section class="slide" data-label="Title">
+    <div class="bg-fx"><div class="blob a"></div><div class="blob b"></div><div class="blob c"></div></div>
+    <div class="slide-content reveal" style="justify-content:center;">
+        <div class="eyebrow">Desktop AI Character · 2026</div>
+        <h1>Claude の対話を、<br /><span class="glow">キャラが声で読み上げる。</span></h1>
+        <p class="lead" style="margin-top:var(--content-gap); max-width:46ch;">デスクトップに常駐するキャラクターが、Claude Code の回答を音声・表情・口パクで読み上げる会話アシスタント。</p>
+        <div class="title-tag tags">
+            <span class="tag c">小春六花 / CeVIO AI</span>
+            <span class="tag m">春日部つむぎ / VOICEVOX</span>
+        </div>
+    </div>
+</section>
+
+<!-- 2. CONCEPT -->
+<section class="slide" data-label="コンセプト">
+    <div class="bg-fx"><div class="blob a"></div><div class="blob b"></div></div>
+    <div class="slide-content reveal">
+        <div class="eyebrow">Concept</div>
+        <h2>「チャットボット」ではなく<br /><span class="glow">デスクトップにキャラがいる</span>感覚。</h2>
+        <ul class="bul" style="margin-top:var(--content-gap); max-width:54ch;">
+            <li>Agent の回答を<strong>会話のように読み上げ</strong>（コード・URL は読まず整形）<span></span></li>
+            <li>感情に応じて<strong>表情が変化</strong>し、声に合わせて<strong>口パク</strong></li>
+            <li>透過・常駐ウィンドウで、<strong>作業しながら隣にいる</strong></li>
+            <li>ユーザー像は<strong>若手・エンジニア</strong>。使っていて楽しいUI</li>
+        </ul>
+    </div>
+</section>
+
+<!-- 3. TWO VERSIONS -->
+<section class="slide" data-label="2つの版">
+    <div class="bg-fx"><div class="blob c"></div><div class="blob b"></div></div>
+    <div class="slide-content reveal">
+        <div class="eyebrow">The Journey</div>
+        <h2>同じ構想を、<span class="glow-m">2つの技術</span>で作った。</h2>
+        <div class="versions" style="margin-top:var(--content-gap);">
+            <div class="card accent-m">
+                <span class="ic">v1 · Live2D</span>
+                <h3>KASUKABE TSUMUGI</h3>
+                <p>Unity 6 + Live2D Cubism + C#。ヘキサゴナル設計の本格実装。</p>
+            </div>
+            <div class="arrow">→</div>
+            <div class="card accent">
+                <span class="ic">v2 · PSD</span>
+                <h3>VoiceAgent</h3>
+                <p>Python + PySide6 + PSD立ち絵。高画質な表情とリップシンクへ。</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 4. V1 OVERVIEW -->
+<section class="slide" data-label="v1 概要">
+    <div class="bg-fx"><div class="blob b"></div></div>
+    <div class="slide-content reveal">
+        <div class="eyebrow">Version 1 · Live2D</div>
+        <h2>KASUKABE TSUMUGI<br /><span style="color:var(--violet)">Unity × Live2D デスクトップ常駐</span></h2>
+        <p style="margin-top:var(--element-gap); max-width:52ch;">春日部つむぎの Live2D 立ち絵が常駐し、まばたき・呼吸・髪物理のアイドル動作＋感情表情＋リップシンクで読み上げる。</p>
+        <div class="tags" style="margin-top:var(--content-gap);">
+            <span class="tag">Unity 6000.3 / URP</span>
+            <span class="tag">Live2D Cubism SDK</span>
+            <span class="tag">VContainer (DI)</span>
+            <span class="tag">UniTask</span>
+            <span class="tag c">VOICEVOX</span>
+            <span class="tag m">claude -p CLI</span>
+        </div>
+    </div>
+</section>
+
+<!-- 5. V1 ARCHITECTURE -->
+<section class="slide" data-label="v1 設計">
+    <div class="bg-fx"><div class="blob c"></div></div>
+    <div class="slide-content reveal">
+        <div class="eyebrow">Version 1 · Architecture</div>
+        <h2>ポート & アダプタ <span style="color:var(--violet)">＋ DI</span></h2>
+        <p style="margin-top:var(--element-gap); max-width:50ch;">Domain を中心に、外部はポート越しに接続。バックエンド差し替え・モックテスト・機能の着脱が容易。</p>
+        <div class="grid cols-3" style="margin-top:var(--content-gap);">
+            <div class="card"><span class="ic">IChatBackend</span><p>LLM 回答取得（claude -p → 将来 API）</p></div>
+            <div class="card"><span class="ic">ITextToSpeech</span><p>音声合成（VOICEVOX）</p></div>
+            <div class="card"><span class="ic">IAvatarController</span><p>表情・口パク・反転</p></div>
+            <div class="card"><span class="ic">IProcessRunner</span><p>外部プロセス（CLI）</p></div>
+            <div class="card"><span class="ic">IFeatureModule</span><p>将来の TFT/Riot を着脱</p></div>
+            <div class="card accent"><span class="ic">asmdef</span><p>依存ルール違反をコンパイル時に拒否</p></div>
+        </div>
+    </div>
+</section>
+
+<!-- 6. PIVOT -->
+<section class="slide" data-label="転換点">
+    <div class="bg-fx"><div class="blob a"></div><div class="blob b"></div></div>
+    <div class="slide-content reveal">
+        <div class="eyebrow">Why Rebuild</div>
+        <h2>Live2D で見えた<span class="glow-m">3つの壁</span>。</h2>
+        <div class="grid cols-3" style="margin-top:var(--content-gap);">
+            <div class="card accent-m"><span class="ic">課題 01</span><h3>画質</h3><p>元データの画質が荒く、拡大で粗が目立つ。</p></div>
+            <div class="card accent-m"><span class="ic">課題 02</span><h3>表情管理</h3><p>パラメータでの表情調整が難しく、再現が大変。</p></div>
+            <div class="card accent-m"><span class="ic">課題 03</span><h3>重さ</h3><p>Unity スタックが、常駐ユーティリティには重い。</p></div>
+        </div>
+        <p style="margin-top:var(--content-gap);"><span class="glow">→ PSD レイヤー切替で、高画質な表情を素直に。</span></p>
+    </div>
+</section>
+
+<!-- 7. V2 OVERVIEW -->
+<section class="slide" data-label="v2 概要">
+    <div class="bg-fx"><div class="blob a"></div><div class="blob c"></div></div>
+    <div class="slide-content reveal">
+        <div class="eyebrow">Version 2 · PSD</div>
+        <h2>VoiceAgent<br /><span class="glow">Python × PSD 立ち絵</span></h2>
+        <p style="margin-top:var(--element-gap); max-width:52ch;">PSD のレイヤーを切り替えて、高画質な表情とリップシンクを実現。レイヤード構成で各エンジンを抽象化。</p>
+        <div class="tags" style="margin-top:var(--content-gap);">
+            <span class="tag">Python 3.14 / PySide6</span>
+            <span class="tag">psd-tools</span>
+            <span class="tag c">CeVIO AI · 小春六花</span>
+            <span class="tag m">VOICEVOX · つむぎ</span>
+            <span class="tag">Claude Agent SDK</span>
+        </div>
+    </div>
+</section>
+
+<!-- 8. V2 FEATURES -->
+<section class="slide" id="s8" data-label="v2 機能">
+    <div class="bg-fx"><div class="blob b"></div></div>
+    <div class="slide-content reveal">
+        <div class="eyebrow">Features</div>
+        <h2>主な機能</h2>
+        <div class="grid cols-3" style="margin-top:var(--content-gap);">
+            <div class="card"><span class="ic">01 voice</span><h3>会話読み上げ</h3><p>文単位でストリーム読み上げ。コード/URL は除去。</p></div>
+            <div class="card"><span class="ic">02 face</span><h3>表情＋口パク</h3><p>感情で表情、音素タイミングで口形を同期。</p></div>
+            <div class="card"><span class="ic">03 window</span><h3>透過常駐</h3><p>最前面・ドラッグ移動・上半身モード・左右反転。</p></div>
+            <div class="card"><span class="ic">04 chat</span><h3>チャット</h3><p>モデル切替・セッション継続・新規チャット。</p></div>
+            <div class="card"><span class="ic">05 menu</span><h3>右クリック操作</h3><p>普段はボタンを隠し、メニューに集約。</p></div>
+            <div class="card accent"><span class="ic">06 cast</span><h3>2キャラ切替</h3><p>小春六花(CeVIO) / つむぎ(VOICEVOX)。</p></div>
+        </div>
+    </div>
+</section>
+
+<!-- 9. TECH HIGHLIGHT: LIPSYNC PERF -->
+<section class="slide" data-label="高速化">
+    <div class="bg-fx"><div class="blob a"></div><div class="blob c"></div></div>
+    <div class="slide-content reveal">
+        <div class="eyebrow">Tech Highlight · Lip-sync</div>
+        <h2>口パクを <span class="glow">140倍</span> 速く。</h2>
+        <div class="grid cols-2" style="margin-top:var(--content-gap); align-items:center;">
+            <div>
+                <p style="max-width:40ch;">psd-tools は可視性を変える度に全レイヤーを再合成し <strong>約10秒</strong>。口を切り替える度に走ると実用不可だった。</p>
+                <div class="stat" style="margin:var(--element-gap) 0;"><b>10s</b><span class="u">→ 0.07s / フレーム</span></div>
+                <p style="max-width:40ch;"><span class="glow">口を隠したベースを1回だけ合成</span>し、口パーツを重ねるだけにした。</p>
+            </div>
+            <div class="code">
+<span class="c"># 重い: 毎フレーム全再合成 (~10s)</span>
+psd.composite()
+
+<span class="c"># 速い: ベース + 口オーバーレイ</span>
+frame = base.<span class="n">copy</span>()
+frame.<span class="n">alpha_composite</span>(mouth)
+<span class="c"># → ~0.07s（キャッシュ後 0.003s）</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 10. V2 ARCHITECTURE / THREADS -->
+<section class="slide" data-label="v2 設計">
+    <div class="bg-fx"><div class="blob b"></div></div>
+    <div class="slide-content reveal">
+        <div class="eyebrow">Version 2 · Architecture</div>
+        <h2>レイヤード ＋ <span class="glow">スレッド分離</span></h2>
+        <p style="margin-top:var(--element-gap); max-width:52ch;">エンジン差異は抽象インターフェースで吸収。重い処理を分離して GUI を固めない。</p>
+        <div class="grid cols-3" style="margin-top:var(--content-gap);">
+            <div class="card"><span class="ic">domain / config</span><p>不変モデルとキャラ定義(TOML)</p></div>
+            <div class="card"><span class="ic">claude (asyncio)</span><p>SDK ストリーム・セッション・persona</p></div>
+            <div class="card"><span class="ic">tts / character</span><p>VOICEVOX・CeVIO 抽象 / PSD 合成</p></div>
+            <div class="card accent"><span class="ic">SynthService</span><p>常駐スレッドで合成（COM を固定）</p></div>
+            <div class="card"><span class="ic">SpeechPlayer</span><p>再生位置に同期して口形フレーム</p></div>
+            <div class="card"><span class="ic">ui (PySide6)</span><p>透過常駐ウィンドウ・チャット</p></div>
+        </div>
+    </div>
+</section>
+
+<!-- 11. ENGINEERING -->
+<section class="slide" data-label="開発実践">
+    <div class="bg-fx"><div class="blob c"></div><div class="blob a"></div></div>
+    <div class="slide-content reveal">
+        <div class="eyebrow">Engineering Practices</div>
+        <h2>エンジニアに届く<span class="glow">作り方</span>。</h2>
+        <div class="grid cols-2" style="margin-top:var(--content-gap);">
+            <div class="card"><span class="ic">git-flow</span><p>main / develop / feature。各フェーズをタグ付けリリース。</p></div>
+            <div class="card"><span class="ic">TDD</span><p>純粋ロジックを 53 テストで担保。実機はスモークで検証。</p></div>
+            <div class="card"><span class="ic">docs / ADR</span><p>アーキテクチャ・設計判断を記録し価値を残す。</p></div>
+            <div class="card accent"><span class="ic">license-safe</span><p>アセット・第三者物を除外し、public でも問題なし。</p></div>
+        </div>
+    </div>
+</section>
+
+<!-- 12. COMPARISON -->
+<section class="slide" data-label="比較">
+    <div class="bg-fx"><div class="blob b"></div><div class="blob c"></div></div>
+    <div class="slide-content reveal">
+        <div class="eyebrow">v1 vs v2</div>
+        <h2>Live2D 版 と PSD 版</h2>
+        <table class="cmp" style="margin-top:var(--content-gap);">
+            <thead><tr><th>観点</th><th class="v1">v1 · Live2D / Unity</th><th class="v2">v2 · PSD / Python</th></tr></thead>
+            <tbody>
+                <tr><td>表現</td><td class="v1">滑らかな動き</td><td class="v2">高画質・差分が素直</td></tr>
+                <tr><td>表情管理</td><td class="v1">パラメータ調整が難しい</td><td class="v2">レイヤー切替で明快</td></tr>
+                <tr><td>スタック</td><td class="v1">Unity（重い）</td><td class="v2">Python（軽量・常駐向き）</td></tr>
+                <tr><td>設計</td><td class="v1">ヘキサゴナル＋DI</td><td class="v2">レイヤード＋スレッド分離</td></tr>
+                <tr><td>音声</td><td class="v1">VOICEVOX</td><td class="v2">VOICEVOX ＋ CeVIO AI</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- 13. CLOSING -->
+<section class="slide" data-label="まとめ">
+    <div class="bg-fx"><div class="blob a"></div><div class="blob b"></div><div class="blob c"></div></div>
+    <div class="slide-content reveal" style="justify-content:center;">
+        <div class="eyebrow">Wrap-up</div>
+        <h1>声と表情のある<br /><span class="glow">相棒</span>を、デスクトップに。</h1>
+        <div class="grid cols-2" style="margin-top:var(--content-gap); max-width:900px;">
+            <div class="card accent"><span class="ic">GitHub</span><p style="color:var(--ink); font-family:'Space Mono',monospace; word-break:break-all;">github.com/Tomonorarari-Think/claude-voice-agent</p></div>
+            <div class="card"><span class="ic">Next</span><p>5母音リップシンク・感情で表情変化・Riot/TFT 戦績連携。</p></div>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<script>
+// ============== Presentation controller ==============
+(function () {
+    "use strict";
+    const slides = Array.from(document.querySelectorAll(".slide"));
+    const total = slides.length;
+    const dotsWrap = document.getElementById("dots");
+    const progress = document.getElementById("progress");
+    const curEl = document.getElementById("cur");
+    document.getElementById("total").textContent = String(total).padStart(2, "0");
+
+    let current = 0, locked = false;
+
+    // build nav dots
+    slides.forEach((s, i) => {
+        const b = document.createElement("button");
+        b.setAttribute("aria-label", (s.dataset.label || ("Slide " + (i + 1))));
+        b.addEventListener("click", () => go(i));
+        dotsWrap.appendChild(b);
+    });
+    const dots = Array.from(dotsWrap.children);
+
+    function setActive(i) {
+        current = i;
+        curEl.textContent = String(i + 1).padStart(2, "0");
+        progress.style.width = ((i) / (total - 1) * 100) + "%";
+        dots.forEach((d, k) => d.classList.toggle("active", k === i));
+    }
+
+    function reveal(i) { slides[i].classList.add("in"); }
+
+    function go(i) {
+        if (i < 0 || i > total - 1) return;
+        reveal(i); // 移動先は即座に表示（IO に依存しない安全策）
+        setActive(i);
+        slides[i].scrollIntoView({ behavior: "smooth" });
+    }
+
+    // Observe which slide is in view -> drive HUD + reveal (primary)
+    const io = new IntersectionObserver((entries) => {
+        entries.forEach((e) => {
+            if (e.isIntersecting && e.intersectionRatio > 0.55) {
+                const i = slides.indexOf(e.target);
+                reveal(i);
+                setActive(i);
+            }
+        });
+    }, { threshold: [0.55] });
+    slides.forEach((s) => io.observe(s));
+
+    // Fallback: drive reveal/active from scroll position (covers IO edge cases)
+    let raf = null;
+    window.addEventListener("scroll", () => {
+        if (raf) return;
+        raf = requestAnimationFrame(() => {
+            raf = null;
+            const i = Math.round(window.scrollY / window.innerHeight);
+            if (i >= 0 && i < total) { reveal(i); setActive(i); }
+        });
+    }, { passive: true });
+
+    // Honor an initial #fragment (e.g. deep link) and reveal slide 1
+    reveal(0); setActive(0);
+    if (location.hash) {
+        const target = document.querySelector(location.hash);
+        const i = target ? slides.indexOf(target) : -1;
+        if (i > 0) { reveal(i); setActive(i); requestAnimationFrame(() => target.scrollIntoView()); }
+    }
+
+    // Keyboard
+    window.addEventListener("keydown", (ev) => {
+        if (["ArrowRight", "ArrowDown", " ", "PageDown"].includes(ev.key)) { ev.preventDefault(); go(Math.min(current + 1, total - 1)); }
+        else if (["ArrowLeft", "ArrowUp", "PageUp"].includes(ev.key)) { ev.preventDefault(); go(Math.max(current - 1, 0)); }
+        else if (ev.key === "Home") { go(0); }
+        else if (ev.key === "End") { go(total - 1); }
+    });
+
+    // Wheel (debounced)
+    window.addEventListener("wheel", (ev) => {
+        if (locked) return;
+        if (Math.abs(ev.deltaY) < 24) return;
+        locked = true;
+        go(current + (ev.deltaY > 0 ? 1 : -1));
+        setTimeout(() => { locked = false; }, 700);
+    }, { passive: true });
+
+    // Touch
+    let ty = null;
+    window.addEventListener("touchstart", (e) => { ty = e.touches[0].clientY; }, { passive: true });
+    window.addEventListener("touchend", (e) => {
+        if (ty === null) return;
+        const dy = ty - e.changedTouches[0].clientY;
+        if (Math.abs(dy) > 50) go(current + (dy > 0 ? 1 : -1));
+        ty = null;
+    }, { passive: true });
+})();
+</script>
+</body>
+</html>

@@ -67,7 +67,7 @@ class MainWindow(QWidget):
     # --- UI 構築 --------------------------------------------------------------
 
     def _build_ui(self) -> None:
-        self._placeholder = QLabel("立ち絵を読み込めません。SETUP.md を参照してください。", self)
+        self._placeholder = QLabel("立ち絵を読み込めません。docs/setup.md を参照してください。", self)
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._placeholder.setStyleSheet("color:#fff; background:transparent;")
         self._placeholder.hide()

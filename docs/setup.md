@@ -13,6 +13,9 @@
 
 ## 2. インストール
 
+Windows は `scripts\setup.bat` をダブルクリックで仮想環境作成＋依存インストールが完了します。
+手動の場合:
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -21,7 +24,7 @@ pip install -e ".[dev]"
 
 ## 3. エンジン/アセットのパス設定
 
-`VoiceAppPath.example.md` を `VoiceAppPath.md` にコピーして、自分の環境のパスに書き換えます
+リポジトリ直下の `VoiceAppPath.example.md` を `VoiceAppPath.md` にコピーして、自分の環境のパスに書き換えます
 （`VoiceAppPath.md` は環境固有のため gitignore 対象）。`local_settings.json`（自動生成・gitignore対象）でも上書きできます。
 
 ```
@@ -48,6 +51,8 @@ C:\path\to\CeVIO\CeVIO AI
 
 ## 5. 起動
 
+`scripts\VoiceAgent.bat`（コンソールなし）/ `scripts\VoiceAgent-debug.bat`（ログ表示）。手動の場合:
+
 ```powershell
 voiceagent
 # または
@@ -60,4 +65,4 @@ python -m voiceagent.app.main
 
 - **春日部つむぎ公式立ち絵は「二次配布」が禁止**されています。本リポジトリには含めず、各自で公式から入手してください。
 - 小春六花の立ち絵・音声、CeVIO/VOICEVOX 各製品もそれぞれの規約に従ってください。
-- 詳細は [LICENSE-THIRD-PARTY.md](LICENSE-THIRD-PARTY.md) を参照。
+- 詳細は [third-party-licenses.md](third-party-licenses.md) を参照。
