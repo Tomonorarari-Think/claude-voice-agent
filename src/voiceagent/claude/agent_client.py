@@ -33,21 +33,29 @@ class AgentClient:
         self,
         session_manager: SessionManager,
         *,
-        allowed_tools: list[str] | None = None,
-        max_turns: int = 1,
+        max_turns: int = 200,
+        permission_mode: str = "bypassPermissions",
+        cwd: str | None = None,
     ) -> None:
         self._sessions = session_manager
-        self._allowed_tools = allowed_tools if allowed_tools is not None else []
+        # ツール実行のたびに 1 ターン消費するため、応答が途中で止まらないよう十分大きく。
         self._max_turns = max_turns
+        # 参考: .discordbot/bot.py の --dangerously-skip-permissions に相当（自分の PC・本人指示）。
+        # 権限プロンプトで止まらないよう bypass する。
+        self._permission_mode = permission_mode
+        self._cwd = cwd
 
     def _build_options(self, config: CharacterConfig, model_id: str) -> ClaudeAgentOptions:
-        return ClaudeAgentOptions(
+        kwargs: dict = dict(
             model=model_id,
             resume=self._sessions.session_id,
             system_prompt=build_system_prompt(config),
-            allowed_tools=self._allowed_tools,
+            permission_mode=self._permission_mode,
             max_turns=self._max_turns,
         )
+        if self._cwd:
+            kwargs["cwd"] = self._cwd
+        return ClaudeAgentOptions(**kwargs)
 
     async def stream(
         self,

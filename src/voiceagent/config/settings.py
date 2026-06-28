@@ -34,6 +34,7 @@ class Settings:
     asset_root: str | None = None
     voicevox_run_exe: str | None = None
     cevio_dir: str | None = None
+    project_path: str | None = None  # Claude Code の作業ディレクトリ（cwd）
     window: WindowState = field(default_factory=WindowState)
 
     def with_model(self, model: str) -> "Settings":
