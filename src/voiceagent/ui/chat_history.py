@@ -52,6 +52,8 @@ class _Bubble(QLabel):
         super().__init__(text, parent)
         self.setWordWrap(True)
         self.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        # 右クリックは独自メニューを出さず親（ウィンドウ）へ委譲する。
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.setStyleSheet(_QSS[kind])
         self._effect = QGraphicsOpacityEffect(self)
